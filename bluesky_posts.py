@@ -393,7 +393,7 @@ class BlueskyPostsFetcher:
         
         Args:
             query: Texto a buscar
-            limit: Número máximo de resultados (por defecto 50)
+            limit: Número máximo de resultados (por defecto 50, máximo 100 según límites de la API)
             **kwargs: Parámetros adicionales de búsqueda:                
                 - from_user: Posts de un usuario específico (equivalent to from:handle)
                 - mention: Posts que mencionan a un usuario específico (equivalent to mentions:handle)
@@ -406,6 +406,11 @@ class BlueskyPostsFetcher:
             List[Dict]: Lista de posts encontrados
         """
         try:
+            # Validar el límite (máximo 100 según la API de Bluesky)
+            if limit > 100:
+                print(f"⚠️ El límite máximo de la API es 100 posts. Cambiando de {limit} a 100.")
+                limit = 100
+                
             # Construir la consulta con los parámetros
             search_query = query
             
@@ -543,7 +548,7 @@ def main():
     parser.add_argument('--since', help='Buscar posts desde una fecha (formato: YYYY-MM-DD)')
     parser.add_argument('--until', help='Buscar posts hasta una fecha (formato: YYYY-MM-DD)')
     parser.add_argument('--domain', help='Buscar posts que contienen enlaces a un dominio específico')
-    parser.add_argument('-n', '--limit', type=int, default=20, help='Número máximo de posts por usuario o búsqueda')
+    parser.add_argument('-n', '--limit', type=int, default=20, help='Número máximo de posts por usuario o búsqueda (máx. 100 para búsquedas)')
     parser.add_argument('-o', '--output', help='Nombre del archivo de salida')
     parser.add_argument('-x', '--format', choices=['json', 'csv', 'parquet'], default='json',
                         help='Formato de exportación: json, csv o parquet')
