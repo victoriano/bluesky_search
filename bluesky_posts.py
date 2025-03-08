@@ -123,7 +123,126 @@ class BlueskyPostsFetcher:
             print(f"❌ Error al obtener posts de @{handle}: {str(e)}")
             return []
     
-    def get_posts_from_list(self, handles: List[str], limit_per_user: int = 20) -> Dict[str, List[Dict[str, Any]]]:
+    def parse_bluesky_list_url(self, url: str) -> Dict[str, str]:
+        """
+        Extrae el handle del usuario y el ID de la lista de una URL de lista de Bluesky.
+        
+        Args:
+            url: URL de la lista de Bluesky (ej: https://bsky.app/profile/usuario.bsky.social/lists/123abc)
+            
+        Returns:
+            Dict: Diccionario con 'handle' e 'id' de la lista, o None si la URL no es válida
+        """
+        import re
+        # Patrón para extraer el handle y el ID de la lista
+        pattern = r'bsky\.app/profile/([^/]+)/lists/([^/]+)'
+        match = re.search(pattern, url)
+        
+        if match:
+            return {
+                'handle': match.group(1),
+                'list_id': match.group(2)
+            }
+        return None
+    
+    def get_posts_from_bluesky_list(self, handle: str, list_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Obtiene posts directamente de una lista de Bluesky.
+        
+        Args:
+            handle: Handle del propietario de la lista
+            list_id: ID de la lista
+            limit: Número máximo de posts a obtener
+            
+        Returns:
+            List[Dict]: Lista de posts obtenidos de la lista
+        """
+        try:
+            # Primero, obtenemos el ID completo de la lista con el formato did:plc:xyz/app.bsky.graph.list/listname
+            profile = self.client.get_profile(actor=handle)
+            list_uri = f"at://{profile.did}/app.bsky.graph.list/{list_id}"
+            
+            # Obtener información básica de la lista
+            response = self.client.app.bsky.graph.get_list({"list": list_uri})
+            
+            list_name = "Lista"
+            if hasattr(response, 'list') and hasattr(response.list, 'name'):
+                list_name = response.list.name
+                print(f"Lista encontrada: {list_name}")
+            
+            # Obtener el feed de la lista usando el método correcto: get_list_feed
+            list_feed = self.client.app.bsky.feed.get_list_feed({"list": list_uri, "limit": limit})
+            
+            # Procesar los posts
+            posts = []
+            if hasattr(list_feed, 'feed'):
+                for feed_view in list_feed.feed:
+                    post = feed_view.post
+                    
+                    # Extraer información relevante (mismo formato que get_user_posts)
+                    post_data = {
+                        'uri': post.uri,
+                        'cid': post.cid,
+                        'author': {
+                            'did': post.author.did,
+                            'handle': post.author.handle,
+                            'display_name': getattr(post.author, 'display_name', post.author.handle)
+                        },
+                        'text': post.record.text,
+                        'created_at': post.record.created_at,
+                        'likes': getattr(post, 'like_count', 0),
+                        'reposts': getattr(post, 'repost_count', 0),
+                        'replies': getattr(post, 'reply_count', 0)
+                    }
+                    
+                    # Añadir imágenes si existen
+                    if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images'):
+                        post_data['images'] = [img.alt for img in post.record.embed.images]
+                    
+                    posts.append(post_data)
+            
+            print(f"✅ Obtenidos {len(posts)} posts de la lista '{list_name}' de @{handle}")
+            return posts
+            
+        except Exception as e:
+            print(f"❌ Error al obtener posts de la lista: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def get_posts_from_bluesky_list_url(self, list_url: str, limit: int = 100) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Obtiene posts directamente de una lista de Bluesky usando la URL de la lista.
+        
+        Args:
+            list_url: URL de la lista de Bluesky (ej: https://bsky.app/profile/usuario.bsky.social/lists/123abc)
+            limit: Número máximo de posts a obtener
+            
+        Returns:
+            Dict: Diccionario con los posts organizados por autor
+        """
+        list_info = self.parse_bluesky_list_url(list_url)
+        if not list_info:
+            print(f"❌ URL de lista no válida: {list_url}")
+            print("Formato esperado: https://bsky.app/profile/usuario.bsky.social/lists/123abc")
+            return {}
+        
+        # Obtener posts directamente de la lista
+        list_posts = self.get_posts_from_bluesky_list(list_info['handle'], list_info['list_id'], limit)
+        if not list_posts:
+            return {}
+        
+        # Organizar los posts por autor
+        results = {}
+        for post in list_posts:
+            author_handle = post['author']['handle']
+            if author_handle not in results:
+                results[author_handle] = []
+            results[author_handle].append(post)
+            
+        return results
+    
+    def get_posts_from_users(self, handles: List[str], limit_per_user: int = 20) -> Dict[str, List[Dict[str, Any]]]:
         """
         Obtiene posts de una lista de usuarios.
         
@@ -303,6 +422,7 @@ def main():
     parser.add_argument('-p', '--password', help='Contraseña para autenticación')
     parser.add_argument('-f', '--file', help='Archivo con lista de usuarios (uno por línea)')
     parser.add_argument('-l', '--list', nargs='+', help='Lista de usuarios separados por espacios')
+    parser.add_argument('-b', '--bsky-list', help='URL de una lista de Bluesky (ej: https://bsky.app/profile/usuario/lists/123abc)')
     parser.add_argument('-n', '--limit', type=int, default=20, help='Número máximo de posts por usuario')
     parser.add_argument('-o', '--output', help='Nombre del archivo de salida')
     parser.add_argument('-x', '--format', choices=['json', 'csv', 'parquet'], default='json',
@@ -358,15 +478,26 @@ def main():
     if args.list:
         handles.extend(args.list)
     
-    # Si todavía no hay usuarios, pedir al usuario
-    if not handles:
-        print("⚠️ No se ha especificado ninguna lista de usuarios.")
-        user_input = input("Ingresa usuarios separados por comas: ")
-        handles = [h.strip() for h in user_input.split(',') if h.strip()]
-    
     # Iniciar el proceso
     fetcher = BlueskyPostsFetcher(args.username, args.password)
-    results = fetcher.get_posts_from_list(handles, args.limit)
+    
+    # Si se especificó una URL de lista de Bluesky, obtener posts de esa lista
+    if args.bsky_list:
+        results = fetcher.get_posts_from_bluesky_list_url(args.bsky_list, args.limit)
+    else:
+        # Si todavía no hay usuarios, pedir al usuario
+        if not handles:
+            print("⚠️ No se ha especificado ninguna lista de usuarios.")
+            user_input = input("Ingresa usuarios separados por comas o una URL de lista de Bluesky: ")
+            
+            # Verificar si es una URL de lista de Bluesky
+            if "bsky.app/profile" in user_input and "/lists/" in user_input:
+                results = fetcher.get_posts_from_bluesky_list_url(user_input, args.limit)
+            else:
+                handles = [h.strip() for h in user_input.split(',') if h.strip()]
+                results = fetcher.get_posts_from_users(handles, args.limit)
+        else:
+            results = fetcher.get_posts_from_users(handles, args.limit)
     
     # Guardar resultados
     if results:
