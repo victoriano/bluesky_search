@@ -390,10 +390,11 @@ class BlueskyPostsFetcher:
     def search_posts(self, query: str, limit: int = 50, **kwargs) -> List[Dict[str, Any]]:
         """
         Busca posts en Bluesky basado en múltiples parámetros de búsqueda.
+        Soporta paginación para obtener más de 100 resultados mediante múltiples llamadas a la API.
         
         Args:
             query: Texto a buscar
-            limit: Número máximo de resultados (por defecto 50, máximo 100 según límites de la API)
+            limit: Número máximo de resultados deseados (se harán múltiples llamadas a la API si es necesario)
             **kwargs: Parámetros adicionales de búsqueda:                
                 - from_user: Posts de un usuario específico (equivalent to from:handle)
                 - mention: Posts que mencionan a un usuario específico (equivalent to mentions:handle)
@@ -406,11 +407,12 @@ class BlueskyPostsFetcher:
             List[Dict]: Lista de posts encontrados
         """
         try:
-            # Validar el límite (máximo 100 según la API de Bluesky)
-            if limit > 100:
-                print(f"⚠️ El límite máximo de la API es 100 posts. Cambiando de {limit} a 100.")
-                limit = 100
-                
+            original_limit = limit
+            posts = []
+            api_calls_needed = (limit + 99) // 100  # Redondeo hacia arriba para calcular el número de llamadas necesarias
+            posts_collected = 0
+            cursor = None
+            
             # Construir la consulta con los parámetros
             search_query = query
             
@@ -434,19 +436,45 @@ class BlueskyPostsFetcher:
                 search_query = f"{search_query} domain:{kwargs['domain']}"
             
             print(f"📝 Consulta de búsqueda: {search_query}")
+            if original_limit > 100:
+                print(f"📢 Solicitando {original_limit} posts (se harán aproximadamente {api_calls_needed} llamadas a la API)")
             
-            # Parámetros para la búsqueda
-            search_params = {
-                "q": search_query,
-                "limit": limit
-            }
-            
-            # Realizar la búsqueda usando el método search_posts
-            search_results = self.client.app.bsky.feed.search_posts(search_params)
-            
-            # Procesar los resultados
-            posts = []
-            if hasattr(search_results, 'posts'):
+            # Realizar múltiples búsquedas hasta alcanzar el límite solicitado o hasta que no haya más resultados
+            for call_num in range(api_calls_needed):
+                # Calcular el límite para esta llamada (máximo 100)
+                current_call_limit = min(100, original_limit - posts_collected)
+                
+                if current_call_limit <= 0:
+                    break
+                    
+                # Parámetros para la búsqueda
+                search_params = {
+                    "q": search_query,
+                    "limit": current_call_limit
+                }
+                
+                # Añadir cursor si no es la primera llamada
+                if cursor:
+                    search_params["cursor"] = cursor
+                
+                # Mostrar progreso para llamadas múltiples
+                if api_calls_needed > 1:
+                    print(f"🔍 Realizando llamada {call_num + 1} de ~{api_calls_needed} (obteniendo {current_call_limit} posts)")
+                
+                # Realizar la búsqueda
+                search_results = self.client.app.bsky.feed.search_posts(search_params)
+                
+                # Guardar el cursor para la siguiente página si existe
+                cursor = getattr(search_results, 'cursor', None)
+                
+                # Si no hay resultados o cursor, terminar el bucle
+                if not hasattr(search_results, 'posts') or len(search_results.posts) == 0:
+                    if call_num == 0:
+                        print("⚠️ No se encontraron posts que coincidan con la búsqueda")
+                    break
+                
+                # Procesar los resultados de esta página
+                page_posts = []
                 for post in search_results.posts:
                     # Extraer información relevante (mismo formato que get_user_posts)
                     post_data = {
@@ -468,9 +496,26 @@ class BlueskyPostsFetcher:
                     if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images'):
                         post_data['images'] = [img.alt for img in post.record.embed.images]
                     
-                    posts.append(post_data)
+                    page_posts.append(post_data)
+                
+                # Añadir los posts de esta página a la lista completa
+                posts.extend(page_posts)
+                posts_collected += len(page_posts)
+                
+                # Mostrar progreso
+                if api_calls_needed > 1:
+                    print(f"ℹ️ Obtenidos {posts_collected} de {original_limit} posts solicitados")
+                
+                # Si no hay cursor o ya hemos alcanzado el límite, terminar
+                if not cursor or posts_collected >= original_limit:
+                    break
+                
+                # Breve pausa para no sobrecargar la API (solo si hacemos múltiples llamadas)
+                if api_calls_needed > 1:
+                    import time
+                    time.sleep(0.5)  # Pausa de medio segundo entre llamadas
             
-            print(f"✅ Encontrados {len(posts)} posts que coinciden con la búsqueda")
+            print(f"✅ Encontrados un total de {len(posts)} posts que coinciden con la búsqueda")
             return posts
             
         except Exception as e:
@@ -482,15 +527,17 @@ class BlueskyPostsFetcher:
     def get_posts_from_search(self, query: str, limit: int = 50, **kwargs) -> Dict[str, List[Dict[str, Any]]]:
         """
         Obtiene posts de una búsqueda y los organiza por autor.
+        Soporta obtener más de 100 posts mediante paginación automática.
         
         Args:
             query: Texto a buscar
-            limit: Número máximo de resultados
+            limit: Número máximo de resultados (puede ser mayor a 100, se usará paginación)
             **kwargs: Parámetros adicionales de búsqueda
             
         Returns:
             Dict: Diccionario con los posts organizados por autor
         """
+        # La función search_posts ya maneja la paginación internamente
         search_posts = self.search_posts(query, limit, **kwargs)
         if not search_posts:
             return {}
@@ -502,7 +549,8 @@ class BlueskyPostsFetcher:
             if author_handle not in results:
                 results[author_handle] = []
             results[author_handle].append(post)
-            
+        
+        print(f"📊 Posts organizados por autor: {len(results)} autores diferentes")
         return results
         
     def export_results(self, results: Dict[str, List[Dict[str, Any]]], format: str = 'json', filename: str = None) -> Optional[str]:
@@ -548,7 +596,7 @@ def main():
     parser.add_argument('--since', help='Buscar posts desde una fecha (formato: YYYY-MM-DD)')
     parser.add_argument('--until', help='Buscar posts hasta una fecha (formato: YYYY-MM-DD)')
     parser.add_argument('--domain', help='Buscar posts que contienen enlaces a un dominio específico')
-    parser.add_argument('-n', '--limit', type=int, default=20, help='Número máximo de posts por usuario o búsqueda (máx. 100 para búsquedas)')
+    parser.add_argument('-n', '--limit', type=int, default=20, help='Número máximo de posts por usuario o búsqueda (con paginación para más de 100)')
     parser.add_argument('-o', '--output', help='Nombre del archivo de salida')
     parser.add_argument('-x', '--format', choices=['json', 'csv', 'parquet'], default='json',
                         help='Formato de exportación: json, csv o parquet')
