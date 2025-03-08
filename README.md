@@ -7,6 +7,10 @@ Este script permite obtener los posts recientes de una lista de usuarios de Blue
 - Autenticación segura con la API oficial de AT Protocol
 - Obtención de posts de múltiples usuarios
 - Personalización del número de posts a obtener por usuario
+- **Búsqueda avanzada de posts** con múltiples criterios:
+  - Búsqueda por palabras clave o frases
+  - Filtrado por autor, menciones o idioma
+  - Búsqueda por fechas o dominios
 - Exportación de resultados en múltiples formatos:
   - JSON (estructurado por usuario)
   - CSV (datos aplanados para análisis)
@@ -58,9 +62,20 @@ pip install -r requirements.txt
 - `-p`, `--password`: Contraseña para autenticación
 - `-f`, `--file`: Archivo con lista de usuarios (uno por línea)
 - `-l`, `--list`: Lista de usuarios separados por espacios
-- `-n`, `--limit`: Número máximo de posts por usuario (predeterminado: 20)
+- `-b`, `--bsky-list`: URL de una lista de Bluesky
+- `-n`, `--limit`: Número máximo de posts por usuario o búsqueda (predeterminado: 20)
 - `-o`, `--output`: Nombre del archivo de salida
 - `-x`, `--format`: Formato de exportación (`json`, `csv`, o `parquet`, predeterminado: `json`)
+
+#### Parámetros de búsqueda
+
+- `-s`, `--search`: Buscar posts (usar comillas para frases exactas)
+- `--from`: Buscar posts de un usuario específico
+- `--mention`: Buscar posts que mencionan a un usuario específico
+- `--lang`: Buscar posts en un idioma específico (ej: es, en, fr)
+- `--since`: Buscar posts desde una fecha (formato: YYYY-MM-DD)
+- `--until`: Buscar posts hasta una fecha (formato: YYYY-MM-DD)
+- `--domain`: Buscar posts que contienen enlaces a un dominio específico
 
 ### Ejemplos
 
@@ -81,6 +96,31 @@ uv run bluesky_posts.py -x csv
 uv run bluesky_posts.py -x parquet -o mis_posts.parquet
 ```
 
+### Ejemplos de búsqueda
+
+```bash
+# Búsqueda simple por palabra clave
+uv run bluesky_posts.py -s "inteligencia artificial" 
+
+# Búsqueda de posts en inglés
+uv run bluesky_posts.py -s "artificial intelligence" --lang en
+
+# Búsqueda de posts de un usuario específico
+uv run bluesky_posts.py -s "economía" --from usuario.bsky.social
+
+# Búsqueda de posts que mencionan a un usuario
+uv run bluesky_posts.py -s "eventos" --mention usuario.bsky.social
+
+# Búsqueda por rango de fechas
+uv run bluesky_posts.py -s "noticias" --since 2025-01-01 --until 2025-03-01
+
+# Combinación de múltiples criterios
+uv run bluesky_posts.py -s "política" --from periodista.bsky.social --lang es --limit 100 -x csv
+
+# Búsqueda de posts que contienen enlaces a un dominio específico
+uv run bluesky_posts.py -s "análisis" --domain ejemplo.com
+```
+
 ### Formato del archivo de usuarios
 
 Si prefieres usar un archivo con la lista de usuarios, simplemente crea un archivo de texto con un nombre de usuario por línea:
@@ -90,6 +130,14 @@ usuario1
 usuario2
 usuario3
 ```
+
+### Entrada por consola
+
+Si no proporcionas ningún parámetro de usuario o búsqueda, el script te pedirá introducir uno de los siguientes:
+
+- Lista de usuarios separados por comas
+- URL de una lista de Bluesky
+- Búsqueda con el prefijo `buscar:` (ej: `buscar:inteligencia artificial`)
 
 ## Formatos de salida
 

@@ -387,6 +387,119 @@ class BlueskyPostsFetcher:
             print(f"❌ Error al exportar a Parquet: {str(e)}")
             return None
             
+    def search_posts(self, query: str, limit: int = 50, **kwargs) -> List[Dict[str, Any]]:
+        """
+        Busca posts en Bluesky basado en múltiples parámetros de búsqueda.
+        
+        Args:
+            query: Texto a buscar
+            limit: Número máximo de resultados (por defecto 50)
+            **kwargs: Parámetros adicionales de búsqueda:                
+                - from_user: Posts de un usuario específico (equivalent to from:handle)
+                - mention: Posts que mencionan a un usuario específico (equivalent to mentions:handle)
+                - language: Idioma de los posts (equivalent to lang:code)
+                - since: Fecha de inicio (formato YYYY-MM-DD)
+                - until: Fecha de fin (formato YYYY-MM-DD)
+                - domain: Dominio específico de URLs en posts (equivalent to domain:example.com)
+            
+        Returns:
+            List[Dict]: Lista de posts encontrados
+        """
+        try:
+            # Construir la consulta con los parámetros
+            search_query = query
+            
+            # Añadir filtros a la consulta según los parámetros proporcionados
+            if 'from_user' in kwargs and kwargs['from_user']:
+                search_query = f"{search_query} from:{kwargs['from_user']}"
+                
+            if 'mention' in kwargs and kwargs['mention']:
+                search_query = f"{search_query} mentions:{kwargs['mention']}"
+                
+            if 'language' in kwargs and kwargs['language']:
+                search_query = f"{search_query} lang:{kwargs['language']}"
+                
+            if 'since' in kwargs and kwargs['since']:
+                search_query = f"{search_query} since:{kwargs['since']}"
+                
+            if 'until' in kwargs and kwargs['until']:
+                search_query = f"{search_query} until:{kwargs['until']}"
+                
+            if 'domain' in kwargs and kwargs['domain']:
+                search_query = f"{search_query} domain:{kwargs['domain']}"
+            
+            print(f"📝 Consulta de búsqueda: {search_query}")
+            
+            # Parámetros para la búsqueda
+            search_params = {
+                "q": search_query,
+                "limit": limit
+            }
+            
+            # Realizar la búsqueda usando el método search_posts
+            search_results = self.client.app.bsky.feed.search_posts(search_params)
+            
+            # Procesar los resultados
+            posts = []
+            if hasattr(search_results, 'posts'):
+                for post in search_results.posts:
+                    # Extraer información relevante (mismo formato que get_user_posts)
+                    post_data = {
+                        'uri': post.uri,
+                        'cid': post.cid,
+                        'author': {
+                            'did': post.author.did,
+                            'handle': post.author.handle,
+                            'display_name': getattr(post.author, 'display_name', post.author.handle)
+                        },
+                        'text': post.record.text,
+                        'created_at': post.record.created_at,
+                        'likes': getattr(post, 'likeCount', 0),
+                        'reposts': getattr(post, 'repostCount', 0),
+                        'replies': getattr(post, 'replyCount', 0)
+                    }
+                    
+                    # Añadir imágenes si existen
+                    if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images'):
+                        post_data['images'] = [img.alt for img in post.record.embed.images]
+                    
+                    posts.append(post_data)
+            
+            print(f"✅ Encontrados {len(posts)} posts que coinciden con la búsqueda")
+            return posts
+            
+        except Exception as e:
+            print(f"❌ Error al buscar posts: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def get_posts_from_search(self, query: str, limit: int = 50, **kwargs) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Obtiene posts de una búsqueda y los organiza por autor.
+        
+        Args:
+            query: Texto a buscar
+            limit: Número máximo de resultados
+            **kwargs: Parámetros adicionales de búsqueda
+            
+        Returns:
+            Dict: Diccionario con los posts organizados por autor
+        """
+        search_posts = self.search_posts(query, limit, **kwargs)
+        if not search_posts:
+            return {}
+        
+        # Organizar los posts por autor
+        results = {}
+        for post in search_posts:
+            author_handle = post['author']['handle']
+            if author_handle not in results:
+                results[author_handle] = []
+            results[author_handle].append(post)
+            
+        return results
+        
     def export_results(self, results: Dict[str, List[Dict[str, Any]]], format: str = 'json', filename: str = None) -> Optional[str]:
         """
         Exporta los resultados en el formato especificado.
@@ -423,7 +536,14 @@ def main():
     parser.add_argument('-f', '--file', help='Archivo con lista de usuarios (uno por línea)')
     parser.add_argument('-l', '--list', nargs='+', help='Lista de usuarios separados por espacios')
     parser.add_argument('-b', '--bsky-list', help='URL de una lista de Bluesky (ej: https://bsky.app/profile/usuario/lists/123abc)')
-    parser.add_argument('-n', '--limit', type=int, default=20, help='Número máximo de posts por usuario')
+    parser.add_argument('-s', '--search', help='Buscar posts (usar comillas para frases exactas)')
+    parser.add_argument('--from', dest='from_user', help='Buscar posts de un usuario específico')
+    parser.add_argument('--mention', help='Buscar posts que mencionan a un usuario específico')
+    parser.add_argument('--lang', help='Buscar posts en un idioma específico (ej: es, en, fr)')
+    parser.add_argument('--since', help='Buscar posts desde una fecha (formato: YYYY-MM-DD)')
+    parser.add_argument('--until', help='Buscar posts hasta una fecha (formato: YYYY-MM-DD)')
+    parser.add_argument('--domain', help='Buscar posts que contienen enlaces a un dominio específico')
+    parser.add_argument('-n', '--limit', type=int, default=20, help='Número máximo de posts por usuario o búsqueda')
     parser.add_argument('-o', '--output', help='Nombre del archivo de salida')
     parser.add_argument('-x', '--format', choices=['json', 'csv', 'parquet'], default='json',
                         help='Formato de exportación: json, csv o parquet')
@@ -481,18 +601,35 @@ def main():
     # Iniciar el proceso
     fetcher = BlueskyPostsFetcher(args.username, args.password)
     
-    # Si se especificó una URL de lista de Bluesky, obtener posts de esa lista
-    if args.bsky_list:
+    # Si se especificó una búsqueda, esta tiene prioridad
+    if args.search:
+        # Construir parámetros de búsqueda
+        search_params = {
+            'from_user': args.from_user,
+            'mention': args.mention,
+            'language': args.lang,
+            'since': args.since,
+            'until': args.until,
+            'domain': args.domain
+        }
+        results = fetcher.get_posts_from_search(args.search, args.limit, **search_params)
+    # Si no hay búsqueda pero hay una URL de lista, obtener posts de esa lista
+    elif args.bsky_list:
         results = fetcher.get_posts_from_bluesky_list_url(args.bsky_list, args.limit)
     else:
         # Si todavía no hay usuarios, pedir al usuario
         if not handles:
-            print("⚠️ No se ha especificado ninguna lista de usuarios.")
-            user_input = input("Ingresa usuarios separados por comas o una URL de lista de Bluesky: ")
+            print("⚠️ No se ha especificado ninguna lista de usuarios ni búsqueda.")
+            user_input = input("Ingresa usuarios separados por comas, una URL de lista de Bluesky, o una búsqueda con 'buscar:': ")
             
+            # Verificar si es una búsqueda
+            if user_input.startswith('buscar:'):
+                search_query = user_input.replace('buscar:', '').strip()
+                results = fetcher.get_posts_from_search(search_query, args.limit)
             # Verificar si es una URL de lista de Bluesky
-            if "bsky.app/profile" in user_input and "/lists/" in user_input:
+            elif "bsky.app/profile" in user_input and "/lists/" in user_input:
                 results = fetcher.get_posts_from_bluesky_list_url(user_input, args.limit)
+            # De lo contrario, asumir que son usuarios
             else:
                 handles = [h.strip() for h in user_input.split(',') if h.strip()]
                 results = fetcher.get_posts_from_users(handles, args.limit)
