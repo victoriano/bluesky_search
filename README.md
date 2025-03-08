@@ -11,6 +11,7 @@ Este script permite obtener los posts recientes de una lista de usuarios de Blue
   - Búsqueda por palabras clave o frases
   - Filtrado por autor, menciones o idioma
   - Búsqueda por fechas o dominios
+  - **Paginación automática** para obtener más de 100 posts (superando el límite de la API)
 - Exportación de resultados en múltiples formatos:
   - JSON (estructurado por usuario)
   - CSV (datos aplanados para análisis)
@@ -63,7 +64,7 @@ pip install -r requirements.txt
 - `-f`, `--file`: Archivo con lista de usuarios (uno por línea)
 - `-l`, `--list`: Lista de usuarios separados por espacios
 - `-b`, `--bsky-list`: URL de una lista de Bluesky
-- `-n`, `--limit`: Número máximo de posts por usuario o búsqueda (predeterminado: 20)
+- `-n`, `--limit`: Número máximo de posts por usuario o búsqueda (predeterminado: 20, sin límite superior para búsquedas gracias a la paginación automática)
 - `-o`, `--output`: Nombre del archivo de salida
 - `-x`, `--format`: Formato de exportación (`json`, `csv`, o `parquet`, predeterminado: `json`)
 
@@ -119,7 +120,22 @@ uv run bluesky_posts.py -s "política" --from periodista.bsky.social --lang es -
 
 # Búsqueda de posts que contienen enlaces a un dominio específico
 uv run bluesky_posts.py -s "análisis" --domain ejemplo.com
+
+# Obteniendo un gran número de posts (con paginación automática)
+uv run bluesky_posts.py -s "Granada" --limit 500 -x csv
+
+# Recopilando un conjunto de datos extenso de un tema
+uv run bluesky_posts.py -s "clima" --since 2024-01-01 --limit 1000 -x parquet
 ```
+
+### Paginación automática
+
+El script soporta la obtención de más de 100 posts por búsqueda (límite de la API de Bluesky) mediante paginación automática. Al solicitar más de 100 posts:
+
+- El sistema realizará múltiples llamadas a la API automáticamente
+- Mostrará el progreso de cada llamada y el total de posts recopilados
+- Combinará todos los resultados en un único conjunto de datos
+- Incluirá breves pausas entre llamadas para no sobrecargar la API
 
 ### Formato del archivo de usuarios
 
