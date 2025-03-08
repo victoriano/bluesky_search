@@ -47,6 +47,28 @@ class BlueskyPostsFetcher:
         self.client = Client()
         if username and password:
             self.login(username, password)
+            
+    def get_web_url_from_uri(self, uri: str, author_handle: str) -> str:
+        """
+        Convierte un URI de AT Protocol a una URL web visible en el navegador.
+        
+        Args:
+            uri: URI del post en formato at://did:plc:xyz/app.bsky.feed.post/abc123
+            author_handle: Handle del autor del post
+            
+        Returns:
+            str: URL web en formato https://bsky.app/profile/handle/post/abc123
+        """
+        try:
+            # Extraer el ID del post del URI (la última parte del path)
+            post_id = uri.split('/')[-1]
+            
+            # Crear la URL web de Bluesky
+            web_url = f"https://bsky.app/profile/{author_handle}/post/{post_id}"
+            return web_url
+        except:
+            # En caso de error, devolver None
+            return None
     
     def login(self, username: str, password: str) -> bool:
         """
@@ -98,6 +120,7 @@ class BlueskyPostsFetcher:
                 post_data = {
                     'uri': post.uri,
                     'cid': post.cid,
+                    'web_url': self.get_web_url_from_uri(post.uri, post.author.handle),
                     'author': {
                         'did': post.author.did,
                         'handle': post.author.handle,
@@ -183,6 +206,7 @@ class BlueskyPostsFetcher:
                     post_data = {
                         'uri': post.uri,
                         'cid': post.cid,
+                        'web_url': self.get_web_url_from_uri(post.uri, post.author.handle),
                         'author': {
                             'did': post.author.did,
                             'handle': post.author.handle,
@@ -302,6 +326,7 @@ class BlueskyPostsFetcher:
                 flat_post = {
                     'user_handle': handle,
                     'post_uri': post['uri'],
+                    'post_web_url': post.get('web_url', ''),  # Incluir la URL web para abrir en navegador
                     'post_cid': post['cid'],
                     'author_did': post['author']['did'],
                     'author_handle': post['author']['handle'],
@@ -480,6 +505,7 @@ class BlueskyPostsFetcher:
                     post_data = {
                         'uri': post.uri,
                         'cid': post.cid,
+                        'web_url': self.get_web_url_from_uri(post.uri, post.author.handle),
                         'author': {
                             'did': post.author.did,
                             'handle': post.author.handle,
