@@ -1,202 +1,282 @@
 # Bluesky Posts Fetcher
 
-Este script permite obtener los posts recientes de una lista de usuarios de Bluesky (AT Protocol) y exportarlos en varios formatos.
+This script retrieves recent posts from Bluesky (AT Protocol) users and exports them in multiple formats.
 
-## Características
+## Features
 
-- Autenticación segura con la API oficial de AT Protocol
-- Obtención de posts de múltiples usuarios
-- Personalización del número de posts a obtener por usuario
-- **Búsqueda avanzada de posts** con múltiples criterios:
-  - Búsqueda por palabras clave o frases
-  - Filtrado por autor, menciones o idioma
-  - Búsqueda por fechas o dominios
-  - **Paginación automática** para obtener más de 100 posts (superando el límite de la API)
-- Exportación de resultados en múltiples formatos:
-  - JSON (estructurado por usuario)
-  - CSV (datos aplanados para análisis)
-  - Parquet (optimizado para big data)
+- Secure authentication with official AT Protocol API
+- Post retrieval from multiple users
+- Customizable number of posts per user
+- **Advanced post search** with multiple criteria:
+  - Keyword/phrase search
+  - Filter by author, mentions, or language
+  - Date range filtering
+  - Domain filtering
+  - **Automatic pagination** to retrieve beyond 100-post API limit
+- Multiple export formats:
+  - JSON (structured by user)
+  - CSV (flattened for analysis)
+  - Parquet (optimized for big data)
 
-## Requisitos
+## Requirements
 
-- Python 3.8 o superior
-- Biblioteca `atproto`
-- Biblioteca `polars` (para exportación CSV/Parquet)
+- Python 3.8+
+- `atproto` library
+- `polars` library (for CSV/Parquet export)
 
-## Instalación
+## Installation
 
-### Usando uv (recomendado)
+### Using uv (recommended)
 
 ```bash
-# Crear y activar un entorno virtual con uv
+# Create and activate virtual environment
 uv venv
 
-# Activar el entorno virtual
-source .venv/bin/activate  # En Linux/macOS
-# o
-.venv\Scripts\activate     # En Windows
+# Activate virtual environment
+source .venv/bin/activate  # Linux/macOS
+# or
+.venv\Scripts\activate     # Windows
 
-# Instalar dependencias con uv
+# Install dependencies
 uv pip install -r requirements.txt
 ```
 
-### Método alternativo (pip)
+### Alternative Method (pip)
 
 ```bash
-# Crear un entorno virtual
+# Create virtual environment
 python -m venv venv
 
-# Activar el entorno virtual
-source venv/bin/activate  # En Linux/macOS
-# o
-venv\Scripts\activate     # En Windows
+# Activate virtual environment
+source venv/bin/activate  # Linux/macOS
+# or
+venv\Scripts\activate     # Windows
 
-# Instalar dependencias
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-## Uso
+## Usage
 
-### Parámetros disponibles
+### Available Parameters
 
-- `-u`, `--username`: Nombre de usuario o correo electrónico para autenticación
-- `-p`, `--password`: Contraseña para autenticación
-- `-f`, `--file`: Archivo con lista de usuarios (uno por línea)
-- `-l`, `--list`: Lista de usuarios separados por espacios
-- `-b`, `--bsky-list`: URL de una lista de Bluesky
-- `-n`, `--limit`: Número máximo de posts por usuario o búsqueda (predeterminado: 20, sin límite superior para búsquedas gracias a la paginación automática)
-- `-o`, `--output`: Nombre del archivo de salida
-- `-x`, `--format`: Formato de exportación (`json`, `csv`, o `parquet`, predeterminado: `json`)
+- `-u`, `--username`: Username/email for authentication
+- `-p`, `--password`: Password for authentication
+- `-f`, `--file`: File containing user list (one per line)
+- `-l`, `--list`: Space-separated list of users
+- `-b`, `--bsky-list`: Bluesky list URL
+- `-n`, `--limit`: Max posts per user/search (default: 20, no upper limit for searches)
+- `-o`, `--output`: Output filename
+- `-x`, `--format`: Export format (`json`, `csv`, or `parquet`, default: `json`)
 
-#### Parámetros de búsqueda
+#### Search Parameters
 
-- `-s`, `--search`: Buscar posts (usar comillas para frases exactas)
-- `--from`: Buscar posts de un usuario específico
-- `--mention`: Buscar posts que mencionan a un usuario específico
-- `--lang`: Buscar posts en un idioma específico (ej: es, en, fr)
-- `--since`: Buscar posts desde una fecha (formato: YYYY-MM-DD)
-- `--until`: Buscar posts hasta una fecha (formato: YYYY-MM-DD)
-- `--domain`: Buscar posts que contienen enlaces a un dominio específico
+- `-s`, `--search`: Search posts (use quotes for exact phrases)
+- `--from`: Search posts from specific user
+- `--mention`: Search posts mentioning specific user
+- `--lang`: Search posts in specific language (e.g., es, en, fr)
+- `--since`: Search posts from date (YYYY-MM-DD)
+- `--until`: Search posts until date (YYYY-MM-DD)
+- `--domain`: Search posts containing links to specific domain
 
-### Ejemplos
+### Examples
 
 ```bash
-# Obtener posts de usuarios específicos
-python bluesky_posts.py -u tu_usuario -p tu_contraseña -l usuario1 usuario2 usuario3
+# Get posts from specific users
+python bluesky_posts.py -u your_username -p your_password -l user1 user2 user3
 
-# Obtener posts de usuarios desde un archivo
-python bluesky_posts.py -u tu_usuario -p tu_contraseña -f usuarios.txt
+# Get posts from users in a file
+python bluesky_posts.py -u your_username -p your_password -f users.txt
 
-# Especificar el límite de posts por usuario y el archivo de salida
-python bluesky_posts.py -u tu_usuario -p tu_contraseña -l usuario1 usuario2 -n 50 -o resultados.json
+# Specify post limit per user and output file
+python bluesky_posts.py -u your_username -p your_password -l user1 user2 -n 50 -o results.json
 
-# Usando el entorno virtual con uv y exportando a CSV
+# Using uv virtual environment and export to CSV
 uv run bluesky_posts.py -x csv
 
-# Exportando a formato Parquet
-uv run bluesky_posts.py -x parquet -o mis_posts.parquet
+# Export to Parquet format
+uv run bluesky_posts.py -x parquet -o my_posts.parquet
 ```
 
-### Ejemplos de búsqueda
+## Complete Search Guide
+
+The script offers multiple ways to search and retrieve Bluesky posts. Here are all available options:
+
+### 1. User Post Retrieval
 
 ```bash
-# Búsqueda simple por palabra clave
-uv run bluesky_posts.py -s "inteligencia artificial" 
+# Get posts from specific user
+uv run bluesky_posts.py -l user.bsky.social
 
-# Búsqueda de posts en inglés
+# Get posts from multiple users
+uv run bluesky_posts.py -l user1.bsky.social user2.bsky.social user3.bsky.social
+
+# Limit posts per user
+uv run bluesky_posts.py -l user.bsky.social -n 50
+
+# Load users from file
+uv run bluesky_posts.py -f users.txt
+```
+
+### 2. Bluesky List Retrieval
+
+```bash
+# Get posts from all users in a Bluesky list
+uv run bluesky_posts.py -b https://bsky.app/profile/user.bsky.social/lists/123abc
+
+# Limit posts per list user
+uv run bluesky_posts.py -b https://bsky.app/profile/user.bsky.social/lists/123abc -n 30
+```
+
+### 3. Keyword Search
+
+```bash
+# Simple keyword/phrase search
+uv run bluesky_posts.py -s "artificial intelligence"
+
+# Limit search results
+uv run bluesky_posts.py -s "artificial intelligence" -n 50
+```
+
+### 4. Filtered Search
+
+```bash
+# Filter by language
+uv run bluesky_posts.py -s "inteligencia artificial" --lang es
 uv run bluesky_posts.py -s "artificial intelligence" --lang en
 
-# Búsqueda de posts de un usuario específico
-uv run bluesky_posts.py -s "economía" --from usuario.bsky.social
+# Filter by author (posts from specific user)
+uv run bluesky_posts.py -s "economics" --from economist.bsky.social
 
-# Búsqueda de posts que mencionan a un usuario
-uv run bluesky_posts.py -s "eventos" --mention usuario.bsky.social
+# Filter by mentions (posts mentioning user)
+uv run bluesky_posts.py -s "event" --mention organizer.bsky.social
 
-# Búsqueda por rango de fechas
-uv run bluesky_posts.py -s "noticias" --since 2025-01-01 --until 2025-03-01
+# Date range filter
+uv run bluesky_posts.py -s "news" --since 2025-01-01 --until 2025-01-31
 
-# Combinación de múltiples criterios
-uv run bluesky_posts.py -s "política" --from periodista.bsky.social --lang es --limit 100 -x csv
+# Domain filter
+uv run bluesky_posts.py -s "analysis" --domain example.com
+```
 
-# Búsqueda de posts que contienen enlaces a un dominio específico
-uv run bluesky_posts.py -s "análisis" --domain ejemplo.com
+### 5. Combined Filters
 
-# Obteniendo un gran número de posts (con paginación automática)
+```bash
+# Combine multiple filters in one search
+uv run bluesky_posts.py -s "politics" --from journalist.bsky.social --lang es --since 2025-02-01
+
+# Advanced multi-criteria search with specific export
+uv run bluesky_posts.py -s "elections" --lang es --since 2025-01-01 --until 2025-02-29 --domain news.com -n 200 -x csv -o elections_2025.csv
+```
+
+### 6. Pagination for Large Datasets
+
+```bash
+# Get large number of posts (500+) with auto-pagination
 uv run bluesky_posts.py -s "Granada" --limit 500 -x csv
 
-# Recopilando un conjunto de datos extenso de un tema
-uv run bluesky_posts.py -s "clima" --since 2024-01-01 --limit 1000 -x parquet
+# Build extensive dataset on a topic
+uv run bluesky_posts.py -s "climate" --since 2024-01-01 --limit 1000 -x parquet -o climate_dataset.parquet
 ```
 
-### Paginación automática
+### 7. Export Formats
 
-El script soporta la obtención de más de 100 posts por búsqueda (límite de la API de Bluesky) mediante paginación automática. Al solicitar más de 100 posts:
+```bash
+# Export to JSON (default format)
+uv run bluesky_posts.py -s "sports" -o sports.json
 
-- El sistema realizará múltiples llamadas a la API automáticamente
-- Mostrará el progreso de cada llamada y el total de posts recopilados
-- Combinará todos los resultados en un único conjunto de datos
-- Incluirá breves pausas entre llamadas para no sobrecargar la API
+# Export to CSV for spreadsheet analysis
+uv run bluesky_posts.py -s "sports" -x csv -o sports.csv
 
-### Formato del archivo de usuarios
-
-Si prefieres usar un archivo con la lista de usuarios, simplemente crea un archivo de texto con un nombre de usuario por línea:
-
-```
-usuario1
-usuario2
-usuario3
+# Export to Parquet for big data analysis
+uv run bluesky_posts.py -s "sports" -x parquet -o sports.parquet
 ```
 
-### Entrada por consola
+### Advanced Features
 
-Si no proporcionas ningún parámetro de usuario o búsqueda, el script te pedirá introducir uno de los siguientes:
+#### Automatic Pagination
 
-- Lista de usuarios separados por comas
-- URL de una lista de Bluesky
-- Búsqueda con el prefijo `buscar:` (ej: `buscar:inteligencia artificial`)
+The script supports retrieving more than 100 posts per search (Bluesky API limit) through automatic pagination:
 
-## Formatos de salida
+- Makes multiple API calls automatically
+- Shows progress for each call and total collected posts
+- Combines results into single dataset
+- Includes brief pauses between calls to avoid API overload
+
+#### Web URLs for Posts
+
+All retrieved posts include web URLs for direct browser access:
+
+- Format: `https://bsky.app/profile/user.bsky.social/post/identifier`
+- Included in all export formats (JSON, CSV, Parquet)
+- Enables direct verification and access to original posts
+
+#### Example web_url in exported data:
+
+```
+https://bsky.app/profile/user.bsky.social/post/3abc123xyz
+```
+
+This allows easy verification of any post from exported data.
+
+### User File Format
+
+Create a text file with one username per line:
+
+```
+user1
+user2
+user3
+```
+
+### Console Input
+
+If no parameters are provided, the script will prompt for:
+
+- Comma-separated list of users
+- Bluesky list URL
+- Search query with `search:` prefix (e.g., `search:artificial intelligence`)
+
+## Output Formats
 
 ### JSON
-El script genera un archivo JSON con la siguiente estructura:
+Structured output format:
 
 ```json
 {
-  "usuario1": [
+  "user1": [
     {
       "uri": "at://...",
       "cid": "...",
+      "web_url": "https://bsky.app/profile/user.bsky.social/post/abc123",
       "author": {
         "did": "did:plc:...",
-        "handle": "usuario1",
-        "display_name": "Nombre mostrado"
+        "handle": "user1",
+        "display_name": "Display Name"
       },
-      "text": "Contenido del post",
-      "created_at": "2023-...",
+      "text": "Post content",
+      "created_at": "2025-...",
       "likes": 5,
       "reposts": 2,
       "replies": 3
     },
     ...
-  ],
-  "usuario2": [
-    ...
   ]
 }
 ```
 
-### CSV y Parquet
-Los formatos CSV y Parquet contienen una estructura aplanada con las siguientes columnas:
+### CSV & Parquet
+Flattened structure with columns:
 
-- `user_handle`: Handle del usuario (nombre de usuario con dominio)
-- `post_uri`: URI completo del post
-- `post_cid`: CID único del post
-- `author_did`: DID del autor
-- `author_handle`: Handle del autor
-- `author_display_name`: Nombre mostrado del autor
-- `text`: Contenido de texto del post
-- `created_at`: Fecha y hora de creación
-- `likes`: Número de likes
-- `reposts`: Número de reposts
-- `replies`: Número de respuestas
-- `images`: Imágenes adjuntas (si existen)
+- `user_handle`: User's handle
+- `post_uri`: AT Protocol post URI
+- `post_web_url`: Web URL for direct access
+- `post_cid`: Unique post CID
+- `author_did`: Author's DID
+- `author_handle`: Author's handle
+- `author_display_name`: Author's display name
+- `text`: Post content
+- `created_at`: Creation timestamp
+- `likes`: Like count
+- `reposts`: Repost count
+- `replies`: Reply count
+- `images`: Attached images (if any)

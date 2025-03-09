@@ -256,6 +256,57 @@ class BlueskyAPITester:
             print(f"❌ Failed to find posts matching '{query}' in large search")
         
         return success
+        
+    def test_search_sort_options(self) -> bool:
+        """Test searching for posts with different sort options."""
+        self.print_section("Search with Sort Options")
+        
+        query = self.params["test_search_query"]
+        post_limit = self.params["post_limit"]
+        
+        # Test with 'latest' sort (default)
+        print(f"📝 Searching for '{query}' with 'latest' sort (default)...")
+        latest_posts = self.fetcher.search_posts(query, limit=post_limit, sort='latest')
+        
+        # Test with 'top' sort
+        print(f"📝 Searching for '{query}' with 'top' sort...")
+        top_posts = self.fetcher.search_posts(query, limit=post_limit, sort='top')
+        
+        success_latest = len(latest_posts) > 0
+        success_top = len(top_posts) > 0
+        
+        if success_latest and success_top:
+            print(f"✅ Successfully found posts with both sort options:")
+            print(f"  - Latest sort: {len(latest_posts)} posts")
+            print(f"  - Top sort: {len(top_posts)} posts")
+            
+            # Compare results
+            if latest_posts and top_posts:
+                # Check if the first posts are different
+                if latest_posts[0]['uri'] != top_posts[0]['uri']:
+                    print(f"📊 Different posts at top position - sort is working as expected")
+                    print(f"  - Latest first post: \"{latest_posts[0]['text'][:50]}...\"")
+                    print(f"  - Top first post: \"{top_posts[0]['text'][:50]}...\"")
+                    
+                    # Check date difference if available
+                    if 'created_at' in latest_posts[0] and 'created_at' in top_posts[0]:
+                        latest_date = latest_posts[0]['created_at']
+                        top_date = top_posts[0]['created_at']
+                        print(f"  - Latest first post date: {latest_date}")
+                        print(f"  - Top first post date: {top_date}")
+                else:
+                    print(f"⚠️ Same post at top position in both sort options")
+            
+            # Save examples to file
+            self._save_example("latest_sort_posts", latest_posts, format='csv')
+            self._save_example("top_sort_posts", top_posts, format='csv')
+        else:
+            if not success_latest:
+                print(f"❌ Failed to find posts with 'latest' sort")
+            if not success_top:
+                print(f"❌ Failed to find posts with 'top' sort")
+        
+        return success_latest and success_top
 
     def test_export_formats(self) -> bool:
         """Test exporting results in different formats."""
@@ -356,6 +407,7 @@ class BlueskyAPITester:
             "get_posts_from_users": self.test_get_posts_from_users(),
             "search_posts": self.test_search_posts(),
             "advanced_search": self.test_advanced_search(),
+            "search_sort_options": self.test_search_sort_options(),
             "large_search": self.test_large_search(),
             "export_formats": self.test_export_formats(),
             "get_posts_from_list": self.test_get_posts_from_list(),
@@ -416,7 +468,7 @@ Examples:
     # Test selection arguments
     test_group = parser.add_argument_group("Test Selection")
     test_group.add_argument('--test', choices=[
-        'all', 'auth', 'user', 'users', 'list', 'search', 'advanced-search', 'large-search', 'export'
+        'all', 'auth', 'user', 'users', 'list', 'search', 'advanced-search', 'search-sort', 'large-search', 'export'
     ], default='all', help="Run specific test(s)")
     
     args = parser.parse_args()
@@ -510,6 +562,8 @@ def main() -> None:
             results["search_posts"] = tester.test_search_posts()
         elif args.test == 'advanced-search':
             results["advanced_search"] = tester.test_advanced_search()
+        elif args.test == 'search-sort':
+            results["search_sort_options"] = tester.test_search_sort_options()
         elif args.test == 'large-search':
             results["large_search"] = tester.test_large_search()
         elif args.test == 'export':
