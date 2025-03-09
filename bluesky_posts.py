@@ -399,11 +399,14 @@ class BlueskyPostsFetcher:
                 }
                 
                 # Añadir imágenes si existen
-                if 'images' in post:
+                if 'images' in post and post['images']:
                     # Convertir el array a JSON string para mantener la estructura
                     # pero hacerlo compatible con CSV
                     import json
                     flat_post['images'] = json.dumps(post['images'])
+                else:
+                    # Establecer como null cuando no hay imágenes
+                    flat_post['images'] = None
                 
                 flattened_data.append(flat_post)
         
@@ -661,7 +664,21 @@ class BlueskyPostsFetcher:
                     
                     # Añadir imágenes si existen
                     if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:
-                        post_data['images'] = [img.alt for img in post.record.embed.images]
+                        # Extraer URLs de las imágenes en lugar de textos alternativos
+                        image_urls = []
+                        for img in post.record.embed.images:
+                            if hasattr(img, 'image') and hasattr(img.image, 'ref'):
+                                # Acceder al enlace de la imagen en la propiedad ref
+                                ref_obj = img.image.ref
+                                if hasattr(ref_obj, 'link'):
+                                    # Construir URL completa de la imagen
+                                    cid = ref_obj.link.split('=')[-1] if '=' in ref_obj.link else ref_obj.link
+                                    image_url = f"https://cdn.bsky.app/img/feed/{cid}@jpeg"
+                                    image_urls.append(image_url)
+                        
+                        # Solo añadir el campo 'images' si hay URLs válidas
+                        if image_urls:
+                            post_data['images'] = image_urls
                     
                     page_posts.append(post_data)
                 
