@@ -400,14 +400,9 @@ class BlueskyPostsFetcher:
                 
                 # Añadir imágenes si existen
                 if 'images' in post and post['images']:
-                    # Si hay múltiples imágenes, separarlas con punto y coma
-                    # para que sean directamente clickeables en CSV sin formato JSON
-                    if len(post['images']) == 1:
-                        # Si solo hay una imagen, guardarla directamente sin array
-                        flat_post['images'] = post['images'][0]
-                    else:
-                        # Si hay múltiples imágenes, unirlas con punto y coma
-                        flat_post['images'] = ';'.join(post['images'])
+                    # Usar formato JSON array para mantener múltiples imágenes
+                    import json
+                    flat_post['images'] = json.dumps(post['images'])
                 else:
                     # Establecer como null cuando no hay imágenes
                     flat_post['images'] = None
