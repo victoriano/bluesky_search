@@ -118,6 +118,7 @@ def save_results_to_csv(results: Dict[str, List[Dict[str, Any]]], filename: Opti
                     'urls': urls_str,
                     'images': images_str,
                     'mentions': mentions_str,
+                    'lang': post.get('lang', ''),  # Add language field
                     'cid': post.get('cid', ''),
                     'author_did': post.get('author', {}).get('did', ''),
                     'uri': post.get('uri', '')

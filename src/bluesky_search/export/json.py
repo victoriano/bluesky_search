@@ -57,6 +57,7 @@ def save_results_to_json(results: Dict[str, List[Dict[str, Any]]], filename: Opt
                     'urls': post.get('urls', []),
                     'images': post.get('images', []),
                     'mentions': post.get('mentions', []),
+                    'lang': post.get('lang', ''),  # Add language field
                     'cid': post.get('cid', ''),
                     'author_did': post.get('author', {}).get('did', ''),
                     'uri': post.get('uri', '')

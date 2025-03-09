@@ -102,6 +102,7 @@ class BlueskySearch:
                     # No more results
                     break
                 
+                
                 # Process each post
                 for post in search_response.posts:
                     # Extract post data
@@ -120,6 +121,16 @@ class BlueskySearch:
                         'reposts': getattr(post, 'repost_count', 0),
                         'replies': getattr(post, 'reply_count', 0)
                     }
+                    
+                    # Add language information if available
+                    if hasattr(post.record, 'langs') and post.record.langs:
+                        # Use the first language in the list if it's a list
+                        if isinstance(post.record.langs, list) and len(post.record.langs) > 0:
+                            post_data['lang'] = post.record.langs[0]
+                        else:
+                            post_data['lang'] = str(post.record.langs)
+                    else:
+                        post_data['lang'] = ''
                     
                     # Add images if they exist
                     if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:

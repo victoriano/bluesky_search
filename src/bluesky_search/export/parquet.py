@@ -99,6 +99,7 @@ def save_results_to_parquet(results: Dict[str, List[Dict[str, Any]]], filename: 
                     'urls': urls_json,  # Store as JSON string
                     'images': images_json,  # Store as JSON string
                     'mentions': mentions_json,  # Store as JSON string
+                    'lang': post.get('lang', ''),  # Add language field
                     'cid': post.get('cid', ''),
                     'author_did': post.get('author', {}).get('did', ''),
                     'uri': post.get('uri', '')
