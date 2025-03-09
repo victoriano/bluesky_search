@@ -512,9 +512,11 @@ All exports follow this precise column order:
 12. `images` - Array of image URLs in the post
 13. `mentions` - Array of user mentions in the post
 14. `lang` - Language of the post (e.g., 'en' for English)
-15. `cid` - Content identifier for the post
-16. `author_did` - Decentralized identifier for the post author
-17. `uri` - AT Protocol URI for the post
+15. `replied_to_handle` - Handle of the user being replied to (only for reply posts)
+16. `replied_to_id` - Decentralized identifier (DID) of the user being replied to (only for reply posts)
+17. `cid` - Content identifier for the post
+18. `author_did` - Decentralized identifier for the post author
+19. `uri` - AT Protocol URI for the post
 
 #### Format-Specific Details
 

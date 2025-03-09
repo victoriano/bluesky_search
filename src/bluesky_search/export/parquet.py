@@ -79,10 +79,44 @@ def save_results_to_parquet(results: Dict[str, List[Dict[str, Any]]], filename: 
                     except:
                         mentions_array = []
                 
-                # Convert arrays to JSON strings to ensure consistent format in Parquet
-                urls_json = json.dumps(urls_array)
-                images_json = json.dumps(images_array)
-                mentions_json = json.dumps(mentions_array)
+                # Format arrays as properly formatted JSON strings exactly like the CSV export
+                # This ensures consistent formatting across export types
+                
+                # Format URLs array
+                if urls_array:
+                    urls_json = '['
+                    for i, url in enumerate(urls_array):
+                        if i > 0:
+                            urls_json += ', '
+                        # Format URL as a string
+                        urls_json += json.dumps(url)  # This adds quotes around the URL
+                    urls_json += ']'
+                else:
+                    urls_json = '[]'
+                
+                # Format images array
+                if images_array:
+                    images_json = '['
+                    for i, img in enumerate(images_array):
+                        if i > 0:
+                            images_json += ', '
+                        # Format image URL as a string
+                        images_json += json.dumps(img)  # This adds quotes around the image URL
+                    images_json += ']'
+                else:
+                    images_json = '[]'
+                
+                # Format mentions array
+                if mentions_array:
+                    mentions_json = '['
+                    for i, mention in enumerate(mentions_array):
+                        if i > 0:
+                            mentions_json += ', '
+                        # Format mention as a string
+                        mentions_json += json.dumps(mention)  # This adds quotes around the mention
+                    mentions_json += ']'
+                else:
+                    mentions_json = '[]'
                 
                 # Column order exactly as requested by user
                 flat_post = {
@@ -99,7 +133,9 @@ def save_results_to_parquet(results: Dict[str, List[Dict[str, Any]]], filename: 
                     'urls': urls_json,  # Store as JSON string
                     'images': images_json,  # Store as JSON string
                     'mentions': mentions_json,  # Store as JSON string
-                    'lang': post.get('lang', ''),  # Add language field
+                    'lang': post.get('lang', ''),  # Language field
+                    'replied_to_handle': post.get('replied_to_handle', ''),  # Handle of the user being replied to
+                    'replied_to_id': post.get('replied_to_id', ''),  # ID of the user being replied to
                     'cid': post.get('cid', ''),
                     'author_did': post.get('author', {}).get('did', ''),
                     'uri': post.get('uri', '')
