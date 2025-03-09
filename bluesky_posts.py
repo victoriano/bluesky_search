@@ -108,36 +108,121 @@ class BlueskyPostsFetcher:
             # Obtener el perfil del usuario
             profile = self.client.get_profile(actor=handle)
             
-            # Obtener los posts del usuario
-            author_feed = self.client.get_author_feed(actor=handle, limit=limit)
-            
-            # Procesar los posts
+            # Obtener los posts del usuario con paginación para respetar el límite de 100 de la API
             posts = []
-            for feed_view in author_feed.feed:
-                post = feed_view.post
+            cursor = None
+            posts_collected = 0
+            original_limit = limit
+            
+            # Calcular número aproximado de llamadas necesarias
+            api_calls_needed = max(1, (original_limit + 99) // 100)  # Redondeo hacia arriba
+            
+            # Iterar hasta alcanzar el límite o hasta que no haya más resultados
+            for call_num in range(api_calls_needed):
+                # Calcular el límite para esta llamada (máximo 100)
+                current_call_limit = min(100, original_limit - posts_collected)
                 
-                # Extraer información relevante
-                post_data = {
-                    'uri': post.uri,
-                    'cid': post.cid,
-                    'web_url': self.get_web_url_from_uri(post.uri, post.author.handle),
-                    'author': {
-                        'did': post.author.did,
-                        'handle': post.author.handle,
-                        'display_name': getattr(post.author, 'display_name', post.author.handle)
-                    },
-                    'text': post.record.text,
-                    'created_at': post.record.created_at,
-                    'likes': getattr(post, 'like_count', 0),
-                    'reposts': getattr(post, 'repost_count', 0),
-                    'replies': getattr(post, 'reply_count', 0)
+                if current_call_limit <= 0:
+                    break
+                
+                # Parámetros para obtener el feed
+                feed_params = {
+                    "actor": handle,
+                    "limit": current_call_limit
                 }
                 
-                # Añadir imágenes si existen
-                if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:
-                    post_data['images'] = [img.alt for img in post.record.embed.images]
+                # Añadir cursor si no es la primera llamada
+                if cursor:
+                    feed_params["cursor"] = cursor
                 
-                posts.append(post_data)
+                # Obtener los posts
+                try:
+                    author_feed = self.client.get_author_feed(**feed_params)
+                    
+                    # Guardar el cursor para la siguiente página si existe
+                    cursor = getattr(author_feed, 'cursor', None)
+                    
+                    # Si no hay resultados o no hay cursor, terminar el bucle
+                    if not hasattr(author_feed, 'feed') or len(author_feed.feed) == 0:
+                        break
+                    
+                    # Procesar los posts de esta página
+                    for feed_view in author_feed.feed:
+                        try:
+                            post = feed_view.post
+                            posts_collected += 1
+                            
+                            # Extraer información relevante
+                            post_data = {
+                                'uri': post.uri,
+                                'cid': post.cid,
+                                'web_url': self.get_web_url_from_uri(post.uri, post.author.handle),
+                                'author': {
+                                    'did': post.author.did,
+                                    'handle': post.author.handle,
+                                    'display_name': getattr(post.author, 'display_name', post.author.handle)
+                                },
+                                'text': post.record.text,
+                                'created_at': post.record.created_at,
+                                'likes': getattr(post, 'like_count', 0),
+                                'reposts': getattr(post, 'repost_count', 0),
+                                'replies': getattr(post, 'reply_count', 0)
+                            }
+                            
+                            # Añadir imágenes si existen
+                            if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:
+                                # Extraer URLs de las imágenes usando el mismo método que search_posts
+                                image_urls = []
+                                for img in post.record.embed.images:
+                                    if hasattr(img, 'image'):
+                                        img_obj = img.image
+                                        if hasattr(img_obj, 'cid') and img_obj.cid:
+                                            # Convertir el objeto CID a string
+                                            cid_str = str(img_obj.cid)
+                                            author_did = post.author.did
+                                            # Construir URL usando el CID válido como string
+                                            image_url = f"https://bsky.social/xrpc/com.atproto.sync.getBlob?did={author_did}&cid={cid_str}"
+                                            image_urls.append(image_url)
+                                
+                                if image_urls:
+                                    post_data['images'] = image_urls
+                            
+                            # Extraer URLs del contenido del post (dos métodos)
+                            urls = []
+                            
+                            # 1. Extraer URLs de facets (formato estructurado de Bluesky)
+                            if hasattr(post.record, 'facets') and post.record.facets:
+                                for facet in post.record.facets:
+                                    if hasattr(facet, 'features'):
+                                        for feature in facet.features:
+                                            # Buscar features de tipo 'link'
+                                            # En la API de Bluesky, los tipos utilizan py_type en lugar de $type
+                                            if hasattr(feature, 'py_type') and feature.py_type == 'app.bsky.richtext.facet#link':
+                                                if hasattr(feature, 'uri'):
+                                                    urls.append(feature.uri)
+                            
+                            # 2. Como respaldo, también buscar URLs con regex en el texto
+                            import re
+                            url_pattern = r'https?://[\w\-\.]+(?:/[\w\-\./%?&=+#]*)?'
+                            if post.record.text:
+                                regex_urls = re.findall(url_pattern, post.record.text)
+                                # Añadir URLs que no se hayan encontrado en facets
+                                for url in regex_urls:
+                                    if url not in urls:
+                                        urls.append(url)
+                            
+                            # Almacenar URLs si se encontraron
+                            if urls:
+                                post_data['urls'] = urls
+                            
+                            posts.append(post_data)
+                        except Exception as inner_e:
+                            # Si hay un error procesando un post individual, continuar con el siguiente
+                            print(f"⚠️ Error procesando un post de @{handle}: {str(inner_e)}")
+                            continue
+                except Exception as e:
+                    print(f"❌ Error al obtener posts (página {call_num + 1}) de @{handle}: {str(e)}")
+                    break
             
             print(f"✅ Obtenidos {len(posts)} posts de @{handle}")
             return posts
@@ -407,6 +492,15 @@ class BlueskyPostsFetcher:
                     # Establecer como null cuando no hay imágenes
                     flat_post['images'] = None
                 
+                # Añadir URLs si existen
+                if 'urls' in post and post['urls']:
+                    # Usar formato JSON array para mantener múltiples URLs
+                    import json
+                    flat_post['urls'] = json.dumps(post['urls'])
+                else:
+                    # Establecer como null cuando no hay URLs
+                    flat_post['urls'] = None
+                
                 flattened_data.append(flat_post)
         
         # Ordenar por fecha de creación (más recientes primero) si se solicita
@@ -465,6 +559,7 @@ class BlueskyPostsFetcher:
                 'reposts',
                 'replies',
                 'images',
+                'urls',
                 'user_handle',
                 'post_cid',
                 'author_did',
@@ -532,6 +627,7 @@ class BlueskyPostsFetcher:
                 'reposts',
                 'replies',
                 'images',
+                'urls',
                 'user_handle',
                 'post_cid',
                 'author_did',
@@ -615,9 +711,11 @@ class BlueskyPostsFetcher:
                     break
                     
                 # Parámetros para la búsqueda
+                # Asegurarnos de que el límite nunca sea mayor que 100 (límite de la API)
+                api_limit = min(100, current_call_limit)
                 search_params = {
                     "q": search_query,
-                    "limit": current_call_limit,
+                    "limit": api_limit,
                     "sort": kwargs.get('sort', 'latest')  # Orden por defecto: más recientes primero
                 }
                 
@@ -686,6 +784,34 @@ class BlueskyPostsFetcher:
                         # Solo añadir el campo 'images' si hay URLs válidas
                         if image_urls:
                             post_data['images'] = image_urls
+                    
+                    # Extraer URLs del contenido del post (dos métodos)
+                    urls = []
+                    
+                    # 1. Extraer URLs de facets (formato estructurado de Bluesky)
+                    if hasattr(post.record, 'facets') and post.record.facets:
+                        for facet in post.record.facets:
+                            if hasattr(facet, 'features'):
+                                for feature in facet.features:
+                                    # Buscar features de tipo 'link'
+                                    # En la API de Bluesky, los tipos utilizan py_type en lugar de $type
+                                    if hasattr(feature, 'py_type') and feature.py_type == 'app.bsky.richtext.facet#link':
+                                        if hasattr(feature, 'uri'):
+                                            urls.append(feature.uri)
+                    
+                    # 2. Como respaldo, también buscar URLs con regex en el texto
+                    import re
+                    url_pattern = r'https?://[\w\-\.]+(?:/[\w\-\./%?&=+#]*)?'
+                    if post.record.text:
+                        regex_urls = re.findall(url_pattern, post.record.text)
+                        # Añadir URLs que no se hayan encontrado en facets
+                        for url in regex_urls:
+                            if url not in urls:
+                                urls.append(url)
+                    
+                    # Almacenar URLs si se encontraron
+                    if urls:
+                        post_data['urls'] = urls
                     
                     page_posts.append(post_data)
                 
