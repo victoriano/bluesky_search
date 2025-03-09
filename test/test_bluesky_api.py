@@ -26,9 +26,11 @@ import json
 import argparse
 from typing import Dict, List, Any, Optional
 
-# Add parent directory to path to import the BlueskyPostsFetcher class
+# Add parent directory to path to import from the new package structure
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from bluesky_posts import BlueskyPostsFetcher
+from src.bluesky_search import BlueskyPostsFetcher
+
+print("Using the refactored BlueskyPostsFetcher from the new package structure")
 
 # Default test parameters (modify these as needed)
 DEFAULT_TEST_PARAMS = {

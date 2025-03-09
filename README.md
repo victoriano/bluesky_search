@@ -1,6 +1,6 @@
-# Bluesky Posts Fetcher
+# Bluesky Search
 
-This script retrieves recent posts from Bluesky (AT Protocol) users and exports them in multiple formats.
+A Python package for retrieving, searching, and exporting posts from Bluesky (AT Protocol) social network.
 
 ## Features
 
@@ -26,39 +26,75 @@ This script retrieves recent posts from Bluesky (AT Protocol) users and exports 
 
 ## Installation
 
-### Using uv (recommended)
+### Development Installation
 
 ```bash
-# Create and activate virtual environment
-uv venv
+# Clone the repository
+git clone https://github.com/your-username/bluesky-search.git
+cd bluesky-search
 
-# Activate virtual environment
+# Using uv (recommended)
+uv venv
 source .venv/bin/activate  # Linux/macOS
 # or
 .venv\Scripts\activate     # Windows
 
-# Install dependencies
-uv pip install -r requirements.txt
-```
+# Install in development mode
+uv pip install -e .
 
-### Alternative Method (pip)
-
-```bash
-# Create virtual environment
+# Alternative with pip
 python -m venv venv
-
-# Activate virtual environment
 source venv/bin/activate  # Linux/macOS
 # or
 venv\Scripts\activate     # Windows
+pip install -e .
+```
 
-# Install dependencies
-pip install -r requirements.txt
+### Regular Installation (once published to PyPI)
+
+```bash
+# Using uv
+uv pip install bluesky-search
+
+# Using pip
+pip install bluesky-search
 ```
 
 ## Usage
 
-### Available Parameters
+### As a Command Line Tool
+
+The package includes a command-line interface for easy access to all functionality:
+
+```bash
+# Run directly after installation
+bluesky-search --help
+
+# Or from the source directory
+python -m src.bluesky_search.cli --help
+```
+
+### Programmatic Usage
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with authentication
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Get posts from a user
+posts = fetcher.get_user_posts("username.bsky.social", limit=20)
+
+# Search for posts
+search_results = fetcher.search_posts("keyword", limit=50)
+
+# Export results
+fetcher.export_to_json(posts, "output.json")
+fetcher.export_to_csv(posts, "output.csv")
+fetcher.export_to_parquet(posts, "output.parquet")
+```
+
+### Command Line Parameters
 
 - `-u`, `--username`: Username/email for authentication
 - `-p`, `--password`: Password for authentication
@@ -83,19 +119,19 @@ pip install -r requirements.txt
 
 ```bash
 # Get posts from specific users
-python bluesky_posts.py -u your_username -p your_password -l user1 user2 user3
+bluesky-search -u your_username -p your_password -a user1.bsky.social
 
 # Get posts from users in a file
-python bluesky_posts.py -u your_username -p your_password -f users.txt
+bluesky-search -u your_username -p your_password -f users.txt
 
 # Specify post limit per user and output file
-python bluesky_posts.py -u your_username -p your_password -l user1 user2 -n 50 -o results.json
+bluesky-search -u your_username -p your_password -a user1.bsky.social -n 50 -o results.json
 
-# Using uv virtual environment and export to CSV
-uv run bluesky_posts.py -x csv
+# Using the CLI with export to CSV
+bluesky-search -a user.bsky.social -e csv -o user_posts.csv
 
 # Export to Parquet format
-uv run bluesky_posts.py -x parquet -o my_posts.parquet
+bluesky-search -a user.bsky.social -e parquet -o my_posts.parquet
 ```
 
 ## Complete Search Guide
@@ -106,96 +142,286 @@ The script offers multiple ways to search and retrieve Bluesky posts. Here are a
 
 ```bash
 # Get posts from specific user
-uv run bluesky_posts.py -l user.bsky.social
-
-# Get posts from multiple users
-uv run bluesky_posts.py -l user1.bsky.social user2.bsky.social user3.bsky.social
-
-# Limit posts per user
-uv run bluesky_posts.py -l user.bsky.social -n 50
+bluesky-search -a user.bsky.social
 
 # Load users from file
-uv run bluesky_posts.py -f users.txt
+bluesky-search -f users.txt
+
+# Limit posts per user
+bluesky-search -a user.bsky.social -n 50
+```
+
+Using the Python API:
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with your credentials
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Get posts from a single user
+posts = fetcher.get_user_posts("user.bsky.social", limit=50)
+
+# Process the posts
+for post in posts:
+    print(f"Post from {post['author']['handle']}: {post['text'][:50]}...")
+
+# Export the results
+fetcher.export_to_json(posts, "user_posts.json")
 ```
 
 ### 2. Bluesky List Retrieval
 
 ```bash
 # Get posts from all users in a Bluesky list
-uv run bluesky_posts.py -b https://bsky.app/profile/user.bsky.social/lists/123abc
+bluesky-search -l https://bsky.app/profile/user.bsky.social/lists/123abc
 
 # Limit posts per list user
-uv run bluesky_posts.py -b https://bsky.app/profile/user.bsky.social/lists/123abc -n 30
+bluesky-search -l https://bsky.app/profile/user.bsky.social/lists/123abc -n 30
+```
+
+Using the Python API:
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with your credentials
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Get posts from a Bluesky list
+list_url = "https://bsky.app/profile/user.bsky.social/lists/123abc"
+list_posts = fetcher.get_list_posts(list_url, limit=30)
+
+# Export the results
+fetcher.export_to_csv(list_posts, "list_posts.csv")
 ```
 
 ### 3. Keyword Search
 
 ```bash
 # Simple keyword/phrase search
-uv run bluesky_posts.py -s "artificial intelligence"
+bluesky-search -s "artificial intelligence"
 
 # Limit search results
-uv run bluesky_posts.py -s "artificial intelligence" -n 50
+bluesky-search -s "artificial intelligence" -n 50
+```
+
+Using the Python API:
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with your credentials
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Search for posts with a keyword
+search_results = fetcher.search_posts("artificial intelligence", limit=50)
+
+# Print number of results
+print(f"Found {len(search_results)} posts about AI")
+
+# Export the results
+fetcher.export_to_parquet(search_results, "ai_posts.parquet")
 ```
 
 ### 4. Filtered Search
 
 ```bash
 # Filter by language
-uv run bluesky_posts.py -s "inteligencia artificial" --lang es
-uv run bluesky_posts.py -s "artificial intelligence" --lang en
+bluesky-search -s "inteligencia artificial" --language es
+bluesky-search -s "artificial intelligence" --language en
 
 # Filter by author (posts from specific user)
-uv run bluesky_posts.py -s "economics" --from economist.bsky.social
+bluesky-search -s "economics" --from economist.bsky.social
 
 # Filter by mentions (posts mentioning user)
-uv run bluesky_posts.py -s "event" --mention organizer.bsky.social
+bluesky-search -s "event" --mention organizer.bsky.social
 
 # Date range filter
-uv run bluesky_posts.py -s "news" --since 2025-01-01 --until 2025-01-31
+bluesky-search -s "news" --since 2025-01-01 --until 2025-01-31
 
 # Domain filter
-uv run bluesky_posts.py -s "analysis" --domain example.com
+bluesky-search -s "analysis" --domain example.com
+```
+
+Using the Python API:
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with your credentials
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Advanced search with filters
+results = fetcher.search_posts(
+    "economics",
+    limit=100,
+    from_user="economist.bsky.social",
+    since="2025-01-01",
+    until="2025-01-31",
+    language="en"
+)
+
+# Export the results
+fetcher.export_to_csv(results, "economics_articles.csv")
 ```
 
 ### 5. Combined Filters
 
 ```bash
 # Combine multiple filters in one search
-uv run bluesky_posts.py -s "politics" --from journalist.bsky.social --lang es --since 2025-02-01
+bluesky-search -s "politics" --from journalist.bsky.social --language es --since 2025-02-01
 
 # Advanced multi-criteria search with specific export
-uv run bluesky_posts.py -s "elections" --lang es --since 2025-01-01 --until 2025-02-29 --domain news.com -n 200 -x csv -o elections_2025.csv
+bluesky-search -s "elections" --language es --since 2025-01-01 --until 2025-02-29 --domain news.com -n 200 -e csv -o elections_2025.csv
+```
+
+Using the Python API:
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with your credentials
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Complex search with multiple filters
+results = fetcher.search_posts(
+    query="elections",
+    limit=200,
+    language="es",
+    since="2025-01-01",
+    until="2025-02-29",
+    domain="news.com"
+)
+
+# Export directly to CSV
+fetcher.export_to_csv(results, "elections_2025.csv")
 ```
 
 ### 6. Pagination for Large Datasets
 
 ```bash
 # Get large number of posts (500+) with auto-pagination
-uv run bluesky_posts.py -s "Granada" --limit 500 -x csv
+bluesky-search -s "Granada" -n 500 -e csv -o granada_posts.csv
 
 # Build extensive dataset on a topic
-uv run bluesky_posts.py -s "climate" --since 2024-01-01 --limit 1000 -x parquet -o climate_dataset.parquet
+bluesky-search -s "climate" --since 2024-01-01 -n 1000 -e parquet -o climate_dataset.parquet
+```
+
+Using the Python API:
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with your credentials
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Large-scale search with automatic pagination
+big_dataset = fetcher.search_posts("climate", limit=1000, since="2024-01-01")
+print(f"Collected {len(big_dataset)} posts about climate")
+
+# Export as Parquet for efficient storage and analysis
+fetcher.export_to_parquet(big_dataset, "climate_dataset.parquet")
 ```
 
 ### 7. Export Formats
 
 ```bash
 # Export to JSON (default format)
-uv run bluesky_posts.py -s "sports" -o sports.json
+bluesky-search -s "sports" -o sports.json
 
 # Export to CSV for spreadsheet analysis
-uv run bluesky_posts.py -s "sports" -x csv -o sports.csv
+bluesky-search -s "sports" -e csv -o sports.csv
 
 # Export to Parquet for big data analysis
-uv run bluesky_posts.py -s "sports" -x parquet -o sports.parquet
+bluesky-search -s "sports" -e parquet -o sports.parquet
+```
+
+Using the Python API:
+
+```python
+from src.bluesky_search import BlueskyPostsFetcher
+
+# Initialize with your credentials
+fetcher = BlueskyPostsFetcher(username="your_username", password="your_password")
+
+# Get posts to export
+sports_posts = fetcher.search_posts("sports", limit=100)
+
+# Export in multiple formats
+fetcher.export_to_json(sports_posts, "sports.json")
+fetcher.export_to_csv(sports_posts, "sports.csv")
+fetcher.export_to_parquet(sports_posts, "sports.parquet")
+```
+
+## Running Manual Queries During Development
+
+During development or for ad-hoc analysis, you can run manual queries directly from the command line without installing the package. This is useful for quick data exploration, testing new search parameters, or during the development process.
+
+### Using the `uv run` Command
+
+`uv` is a fast Python package installer and resolver that can also run Python modules directly. This is ideal for development usage:
+
+```bash
+# Basic search query
+uv run -m src.bluesky_search.cli -u your_username -p your_password -s "search term" -n 100
+
+# Search with export to parquet
+uv run -m src.bluesky_search.cli -u your_username -p your_password -s "search term" -n 350 -e parquet -o results.parquet
+
+# Search with legacy -x parameter for export format
+uv run -m src.bluesky_search.cli -u your_username -p your_password -s "search term" -n 350 -x parquet -o results.parquet
+```
+
+### Using `python -m` Command
+
+Alternatively, you can use Python's module execution capability:
+
+```bash
+# Using python -m
+python -m src.bluesky_search.cli -u your_username -p your_password -s "search term" -n 100 -e json -o results.json
+```
+
+### Tips for Manual Queries
+
+- Add the `-o` parameter to specify the output file name, otherwise a timestamped file will be generated automatically
+- Include the `-n` parameter to control the number of results (especially useful for large searches)
+- Use quotes around search terms containing spaces or special characters
+- For regular usage of the tool, consider installing it in development mode with `uv pip install -e .` or `pip install -e .`
+- When searching for a large number of posts, use progress indicators in the terminal output to monitor the collection process
+
+## Package Structure
+
+The package is organized into logical modules:
+
+```
+bluesky_search/
+├── src/
+│   └── bluesky_search/
+│       ├── __init__.py          # Package exports
+│       ├── client.py            # Base client functionality
+│       ├── fetcher.py           # Post fetching functionality
+│       ├── search.py            # Search functionality
+│       ├── list.py              # List handling functionality
+│       ├── cli.py               # Command-line interface
+│       ├── export/              # Export utilities
+│       │   ├── __init__.py
+│       │   ├── json.py          # JSON export
+│       │   ├── csv.py           # CSV export
+│       │   └── parquet.py       # Parquet export
+│       └── utils/               # Utility functions
+│           ├── __init__.py
+│           ├── url.py           # URL handling
+│           └── text.py          # Text processing
+├── test/                        # Test suite
+└── pyproject.toml              # Package configuration
 ```
 
 ### Advanced Features
 
 #### Automatic Pagination
 
-The script supports retrieving more than 100 posts per search (Bluesky API limit) through automatic pagination:
+The package supports retrieving more than 100 posts per search (Bluesky API limit) through automatic pagination:
 
 - Makes multiple API calls automatically
 - Shows progress for each call and total collected posts
@@ -264,19 +490,46 @@ Structured output format:
 }
 ```
 
-### CSV & Parquet
-Flattened structure with columns:
+### Export Formats Specification
 
-- `user_handle`: User's handle
-- `post_uri`: AT Protocol post URI
-- `post_web_url`: Web URL for direct access
-- `post_cid`: Unique post CID
-- `author_did`: Author's DID
-- `author_handle`: Author's handle
-- `author_display_name`: Author's display name
-- `text`: Post content
-- `created_at`: Creation timestamp
-- `likes`: Like count
-- `reposts`: Repost count
-- `replies`: Reply count
-- `images`: Attached images (if any)
+All export formats (CSV, JSON, and Parquet) maintain the exact same column order and structure for consistency across different output formats. This allows for easy switching between formats based on your specific needs.
+
+#### Exact Column Order
+
+All exports follow this precise column order:
+
+1. `user_handle` - The handle under which the post was found (useful for search results)
+2. `author_handle` - The post author's handle
+3. `author_display_name` - The post author's display name
+4. `created_at` - Timestamp when the post was created
+5. `post_type` - Type of post (original, reply, repost, etc.)
+6. `text` - The main text content of the post
+7. `web_url` - URL to view the post on Bluesky's web interface
+8. `likes` - Number of likes the post has received
+9. `reposts` - Number of reposts the post has received
+10. `replies` - Number of replies the post has received
+11. `urls` - Array of URLs mentioned in the post
+12. `images` - Array of image URLs in the post
+13. `mentions` - Array of user mentions in the post
+14. `cid` - Content identifier for the post
+15. `author_did` - Decentralized identifier for the post author
+16. `uri` - AT Protocol URI for the post
+
+#### Format-Specific Details
+
+##### CSV Export
+- Array fields (`urls`, `images`, `mentions`) are preserved as JSON-formatted arrays in string form
+- Example: `["https://example.com", "https://another-example.com"]`
+- Requires the `polars` package
+
+##### JSON Export
+- Maintains native array formats for `urls`, `images`, and `mentions`
+- Preserves the nested dictionary structure where each key is an author handle
+- Empty arrays are preserved as `[]` rather than being omitted
+
+##### Parquet Export
+- Array fields (`urls`, `images`, `mentions`) are stored as JSON-formatted array strings
+- Example: `["https://example.com", "https://another-example.com"]`
+- Consistent format across CSV and Parquet exports for easier data integration
+- Most efficient for analytical workloads and data science pipelines
+- Requires the `polars` package

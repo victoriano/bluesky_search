@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bluesky-search"
+version = "0.1.0"
+description = "A package to search, fetch, and export posts from Bluesky social network"
+readme = "README.md"
+authors = [
+    {name = "Original Author", email = "victoriano@gmail.com"}
+]
+license = {text = "MIT"}
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "atproto>=0.0.26",
+]
+
+[project.optional-dependencies]
+export = ["polars>=0.19.2"]
+dev = [
+    "pytest>=6.0",
+    "black>=22.1.0",
+    "isort>=5.9.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/victoriano/bluesky-search"
+"Bug Tracker" = "https://github.com/victoriano/bluesky-search/issues"
+
+[project.scripts]
+bluesky-search = "bluesky_search.cli:main"
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
