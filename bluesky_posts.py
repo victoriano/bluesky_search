@@ -134,7 +134,7 @@ class BlueskyPostsFetcher:
                 }
                 
                 # Añadir imágenes si existen
-                if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images'):
+                if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:
                     post_data['images'] = [img.alt for img in post.record.embed.images]
                 
                 posts.append(post_data)
@@ -175,7 +175,7 @@ class BlueskyPostsFetcher:
         Args:
             handle: Handle del propietario de la lista
             list_id: ID de la lista
-            limit: Número máximo de posts a obtener
+            limit: Número máximo de posts a obtener (con paginación automática si es mayor que 100)
             
         Returns:
             List[Dict]: Lista de posts obtenidos de la lista
@@ -192,38 +192,88 @@ class BlueskyPostsFetcher:
             if hasattr(response, 'list') and hasattr(response.list, 'name'):
                 list_name = response.list.name
                 print(f"Lista encontrada: {list_name}")
-            
-            # Obtener el feed de la lista usando el método correcto: get_list_feed
-            list_feed = self.client.app.bsky.feed.get_list_feed({"list": list_uri, "limit": limit})
-            
-            # Procesar los posts
+                
+            # Implementar paginación para obtener más de 100 posts (límite de la API)
+            original_limit = limit
             posts = []
-            if hasattr(list_feed, 'feed'):
-                for feed_view in list_feed.feed:
-                    post = feed_view.post
-                    
-                    # Extraer información relevante (mismo formato que get_user_posts)
-                    post_data = {
-                        'uri': post.uri,
-                        'cid': post.cid,
-                        'web_url': self.get_web_url_from_uri(post.uri, post.author.handle),
-                        'author': {
-                            'did': post.author.did,
-                            'handle': post.author.handle,
-                            'display_name': getattr(post.author, 'display_name', post.author.handle)
-                        },
-                        'text': post.record.text,
-                        'created_at': post.record.created_at,
-                        'likes': getattr(post, 'like_count', 0),
-                        'reposts': getattr(post, 'repost_count', 0),
-                        'replies': getattr(post, 'reply_count', 0)
-                    }
-                    
-                    # Añadir imágenes si existen
-                    if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images'):
-                        post_data['images'] = [img.alt for img in post.record.embed.images]
-                    
-                    posts.append(post_data)
+            posts_collected = 0
+            cursor = None
+            
+            # Calcular el número aproximado de llamadas a la API necesarias
+            api_call_limit = min(100, limit)  # La API permite máximo 100 posts por llamada
+            api_calls_needed = (limit + api_call_limit - 1) // api_call_limit  # Redondeo hacia arriba
+            
+            if api_calls_needed > 1:
+                print(f"📢 Solicitando {original_limit} posts de la lista (se harán aproximadamente {api_calls_needed} llamadas a la API)")
+            
+            # Bucle de paginación
+            for call_num in range(1, api_calls_needed + 1):
+                # Calcular cuántos posts quedan por obtener
+                remaining_limit = min(api_call_limit, limit - posts_collected)
+                
+                if api_calls_needed > 1:
+                    print(f"🔍 Realizando llamada {call_num} de ~{api_calls_needed} (obteniendo {remaining_limit} posts)")
+                
+                # Preparar parámetros para la llamada a la API
+                params = {"list": list_uri, "limit": remaining_limit}
+                if cursor:
+                    params["cursor"] = cursor
+                
+                # Realizar la llamada a la API
+                list_feed = self.client.app.bsky.feed.get_list_feed(params)
+                
+                # Obtener el cursor para la siguiente página
+                cursor = getattr(list_feed, 'cursor', None)
+                
+                page_posts = []
+                # Procesar los posts de esta página
+                if hasattr(list_feed, 'feed'):
+                    for feed_view in list_feed.feed:
+                        post = feed_view.post
+                        
+                        # Extraer información relevante (mismo formato que get_user_posts)
+                        post_data = {
+                            'uri': post.uri,
+                            'cid': post.cid,
+                            'web_url': self.get_web_url_from_uri(post.uri, post.author.handle),
+                            'author': {
+                                'did': post.author.did,
+                                'handle': post.author.handle,
+                                'display_name': getattr(post.author, 'display_name', post.author.handle)
+                            },
+                            'text': post.record.text,
+                            'created_at': post.record.created_at,
+                            'likes': getattr(post, 'like_count', 0),
+                            'reposts': getattr(post, 'repost_count', 0),
+                            'replies': getattr(post, 'reply_count', 0)
+                        }
+                        
+                        # Añadir imágenes si existen
+                        if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:
+                            post_data['images'] = [img.alt for img in post.record.embed.images]
+                        
+                        page_posts.append(post_data)
+                
+                # Añadir los posts de esta página a la lista completa
+                posts.extend(page_posts)
+                posts_collected += len(page_posts)
+                
+                # Mostrar progreso
+                if api_calls_needed > 1:
+                    print(f"ℹ️ Obtenidos {posts_collected} de {original_limit} posts solicitados")
+                
+                # Si no hay cursor o ya hemos alcanzado el límite, terminar
+                if not cursor or posts_collected >= original_limit:
+                    break
+                    time.sleep(0.5)  # Pausa de medio segundo entre llamadas
+            
+            if posts:
+                # Obtener el rango de fechas para mostrar
+                if len(posts) > 1:
+                    dates = [post['created_at'] for post in posts]
+                    oldest = min(dates)
+                    newest = max(dates)
+                    print(f"📅 Rango de fechas: {oldest} a {newest}")
             
             print(f"✅ Obtenidos {len(posts)} posts de la lista '{list_name}' de @{handle}")
             return posts
@@ -299,9 +349,17 @@ class BlueskyPostsFetcher:
         Returns:
             str: Ruta del archivo guardado
         """
+        # Crear directorio 'data' si no existe
+        data_dir = "data"
+        os.makedirs(data_dir, exist_ok=True)
+        
         if not filename:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"bluesky_posts_{timestamp}.json"
+        
+        # Añadir directorio data al path si no lo tiene ya
+        if not filename.startswith(data_dir):
+            filename = os.path.join(data_dir, os.path.basename(filename))
         
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
@@ -309,18 +367,20 @@ class BlueskyPostsFetcher:
         print(f"✅ Resultados guardados en {filename}")
         return filename
         
-    def _flatten_results(self, results: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    def _flatten_results(self, results: Dict[str, List[Dict[str, Any]]], sort_by_date: bool = True) -> List[Dict[str, Any]]:
         """
         Convierte los resultados anidados a una estructura plana para exportación a CSV/Parquet.
         
         Args:
             results: Diccionario con los resultados
+            sort_by_date: Si es True, ordena los posts por fecha de creación (más recientes primero)
             
         Returns:
             List[Dict]: Lista de posts aplanados
         """
         flattened_data = []
         
+        # Recopilamos todos los posts en una lista plana
         for handle, posts in results.items():
             for post in posts:
                 flat_post = {
@@ -343,16 +403,25 @@ class BlueskyPostsFetcher:
                     flat_post['images'] = ', '.join(post['images'])
                 
                 flattened_data.append(flat_post)
+        
+        # Ordenar por fecha de creación (más recientes primero) si se solicita
+        if sort_by_date and flattened_data:
+            try:
+                flattened_data.sort(key=lambda x: x['created_at'], reverse=True)
+                print("📅 Posts ordenados cronológicamente (más recientes primero)")
+            except Exception as e:
+                print(f"⚠️ No se pudieron ordenar los posts por fecha: {str(e)}")
                 
         return flattened_data
         
-    def save_results_to_csv(self, results: Dict[str, List[Dict[str, Any]]], filename: str = None) -> Optional[str]:
+    def save_results_to_csv(self, results: Dict[str, List[Dict[str, Any]]], filename: str = None, sort_by_date: bool = True) -> Optional[str]:
         """
         Guarda los resultados en un archivo CSV utilizando Polars.
         
         Args:
             results: Diccionario con los resultados
             filename: Nombre del archivo (opcional)
+            sort_by_date: Si es True, ordena los posts por fecha de creación (más recientes primero)
             
         Returns:
             str: Ruta del archivo guardado, o None si hubo un error
@@ -360,17 +429,50 @@ class BlueskyPostsFetcher:
         if not POLARS_AVAILABLE:
             print("❌ No se puede exportar a CSV: polars no está instalado.")
             return None
+        
+        # Crear directorio 'data' si no existe
+        data_dir = "data"
+        os.makedirs(data_dir, exist_ok=True)
             
         if not filename:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"bluesky_posts_{timestamp}.csv"
+        
+        # Añadir directorio data al path si no lo tiene ya
+        if not filename.startswith(data_dir):
+            filename = os.path.join(data_dir, os.path.basename(filename))
             
         try:
             # Convertir los datos a una estructura plana
-            flattened_data = self._flatten_results(results)
+            flattened_data = self._flatten_results(results, sort_by_date=sort_by_date)
             
-            # Crear DataFrame y guardar como CSV con Polars
+            # Crear DataFrame y ordenar columnas según el orden especificado
             df = pl.DataFrame(flattened_data)
+            
+            # Definir el orden de las columnas deseado
+            column_order = [
+                'author_handle',
+                'author_display_name',
+                'created_at',
+                'post_web_url',
+                'text',
+                'likes',
+                'reposts',
+                'replies',
+                'images',
+                'user_handle',
+                'post_cid',
+                'author_did',
+                'post_uri'
+            ]
+            
+            # Asegurarse de que todas las columnas existan (algunas podrían faltar como 'images')
+            existing_columns = set(df.columns)
+            ordered_columns = [col for col in column_order if col in existing_columns]
+            remaining_columns = [col for col in existing_columns if col not in column_order]
+            
+            # Reordenar las columnas y escribir el CSV
+            df = df.select(ordered_columns + remaining_columns)
             df.write_csv(filename)
             
             print(f"✅ Resultados guardados en {filename}")
@@ -379,13 +481,14 @@ class BlueskyPostsFetcher:
             print(f"❌ Error al exportar a CSV: {str(e)}")
             return None
             
-    def save_results_to_parquet(self, results: Dict[str, List[Dict[str, Any]]], filename: str = None) -> Optional[str]:
+    def save_results_to_parquet(self, results: Dict[str, List[Dict[str, Any]]], filename: str = None, sort_by_date: bool = True) -> Optional[str]:
         """
         Guarda los resultados en un archivo Parquet utilizando Polars.
         
         Args:
             results: Diccionario con los resultados
             filename: Nombre del archivo (opcional)
+            sort_by_date: Si es True, ordena los posts por fecha de creación (más recientes primero)
             
         Returns:
             str: Ruta del archivo guardado, o None si hubo un error
@@ -393,17 +496,50 @@ class BlueskyPostsFetcher:
         if not POLARS_AVAILABLE:
             print("❌ No se puede exportar a Parquet: polars no está instalado.")
             return None
+        
+        # Crear directorio 'data' si no existe
+        data_dir = "data"
+        os.makedirs(data_dir, exist_ok=True)
             
         if not filename:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"bluesky_posts_{timestamp}.parquet"
+        
+        # Añadir directorio data al path si no lo tiene ya
+        if not filename.startswith(data_dir):
+            filename = os.path.join(data_dir, os.path.basename(filename))
             
         try:
             # Convertir los datos a una estructura plana
-            flattened_data = self._flatten_results(results)
+            flattened_data = self._flatten_results(results, sort_by_date=sort_by_date)
             
-            # Crear DataFrame y guardar como Parquet con Polars
+            # Crear DataFrame y ordenar columnas según el orden especificado
             df = pl.DataFrame(flattened_data)
+            
+            # Definir el orden de las columnas deseado
+            column_order = [
+                'author_handle',
+                'author_display_name',
+                'created_at',
+                'post_web_url',
+                'text',
+                'likes',
+                'reposts',
+                'replies',
+                'images',
+                'user_handle',
+                'post_cid',
+                'author_did',
+                'post_uri'
+            ]
+            
+            # Asegurarse de que todas las columnas existan (algunas podrían faltar como 'images')
+            existing_columns = set(df.columns)
+            ordered_columns = [col for col in column_order if col in existing_columns]
+            remaining_columns = [col for col in existing_columns if col not in column_order]
+            
+            # Reordenar las columnas y escribir el Parquet
+            df = df.select(ordered_columns + remaining_columns)
             df.write_parquet(filename)
             
             print(f"✅ Resultados guardados en {filename}")
@@ -427,6 +563,7 @@ class BlueskyPostsFetcher:
                 - since: Fecha de inicio (formato YYYY-MM-DD)
                 - until: Fecha de fin (formato YYYY-MM-DD)
                 - domain: Dominio específico de URLs en posts (equivalent to domain:example.com)
+                - sort: Orden de los resultados ('latest' para más recientes o 'top' para relevancia/popularidad)
             
         Returns:
             List[Dict]: Lista de posts encontrados
@@ -475,7 +612,8 @@ class BlueskyPostsFetcher:
                 # Parámetros para la búsqueda
                 search_params = {
                     "q": search_query,
-                    "limit": current_call_limit
+                    "limit": current_call_limit,
+                    "sort": kwargs.get('sort', 'latest')  # Orden por defecto: más recientes primero
                 }
                 
                 # Añadir cursor si no es la primera llamada
@@ -513,13 +651,13 @@ class BlueskyPostsFetcher:
                         },
                         'text': post.record.text,
                         'created_at': post.record.created_at,
-                        'likes': getattr(post, 'likeCount', 0),
-                        'reposts': getattr(post, 'repostCount', 0),
-                        'replies': getattr(post, 'replyCount', 0)
+                        'likes': getattr(post, 'like_count', 0),
+                        'reposts': getattr(post, 'repost_count', 0),
+                        'replies': getattr(post, 'reply_count', 0)
                     }
                     
                     # Añadir imágenes si existen
-                    if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images'):
+                    if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:
                         post_data['images'] = [img.alt for img in post.record.embed.images]
                     
                     page_posts.append(post_data)
@@ -535,10 +673,6 @@ class BlueskyPostsFetcher:
                 # Si no hay cursor o ya hemos alcanzado el límite, terminar
                 if not cursor or posts_collected >= original_limit:
                     break
-                
-                # Breve pausa para no sobrecargar la API (solo si hacemos múltiples llamadas)
-                if api_calls_needed > 1:
-                    import time
                     time.sleep(0.5)  # Pausa de medio segundo entre llamadas
             
             print(f"✅ Encontrados un total de {len(posts)} posts que coinciden con la búsqueda")
@@ -579,7 +713,7 @@ class BlueskyPostsFetcher:
         print(f"📊 Posts organizados por autor: {len(results)} autores diferentes")
         return results
         
-    def export_results(self, results: Dict[str, List[Dict[str, Any]]], format: str = 'json', filename: str = None) -> Optional[str]:
+    def export_results(self, results: Dict[str, List[Dict[str, Any]]], format: str = 'json', filename: str = None, sort_by_date: bool = True) -> Optional[str]:
         """
         Exporta los resultados en el formato especificado.
         
@@ -587,6 +721,7 @@ class BlueskyPostsFetcher:
             results: Diccionario con los resultados
             format: Formato de exportación ('json', 'csv' o 'parquet')
             filename: Nombre del archivo (opcional)
+            sort_by_date: Si es True, ordena los posts por fecha de creación (más recientes primero)
             
         Returns:
             str: Ruta del archivo guardado, o None si hubo un error
@@ -596,9 +731,9 @@ class BlueskyPostsFetcher:
         if format == 'json':
             return self.save_results_to_json(results, filename)
         elif format == 'csv':
-            return self.save_results_to_csv(results, filename)
+            return self.save_results_to_csv(results, filename, sort_by_date=sort_by_date)
         elif format == 'parquet':
-            return self.save_results_to_parquet(results, filename)
+            return self.save_results_to_parquet(results, filename, sort_by_date=sort_by_date)
         else:
             print(f"❌ Formato no soportado: {format}")
             print("Formatos disponibles: json, csv, parquet")
