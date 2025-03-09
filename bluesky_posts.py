@@ -670,14 +670,23 @@ class BlueskyPostsFetcher:
                     if hasattr(post.record, 'embed') and hasattr(post.record.embed, 'images') and post.record.embed.images is not None:
                         # Extraer URLs de las imágenes en lugar de textos alternativos
                         image_urls = []
+                        
+                        # Eliminar debug para la versión final
+                        
                         for img in post.record.embed.images:
-                            if hasattr(img, 'image') and hasattr(img.image, 'cid'):
-                                # Usar el formato de API pública de Bluesky que funciona en navegadores
-                                cid = img.image.cid
-                                author_did = post.author.did
-                                # Este formato funciona directamente en navegadores según confirma el usuario
-                                image_url = f"https://bsky.social/xrpc/com.atproto.sync.getBlob?did={author_did}&cid={cid}"
-                                image_urls.append(image_url)
+                            if hasattr(img, 'image'):
+                                # Intentar obtener CID válido
+                                img_obj = img.image
+                                cid = None
+                                
+                                # Extraer CID como string para la URL
+                                if hasattr(img_obj, 'cid') and img_obj.cid:
+                                    # Convertir el objeto CID a string
+                                    cid_str = str(img_obj.cid)
+                                    author_did = post.author.did
+                                    # Construir URL usando el CID válido como string
+                                    image_url = f"https://bsky.social/xrpc/com.atproto.sync.getBlob?did={author_did}&cid={cid_str}"
+                                    image_urls.append(image_url)
                         
                         # Solo añadir el campo 'images' si hay URLs válidas
                         if image_urls:
