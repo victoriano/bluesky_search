@@ -308,6 +308,65 @@ class BlueskyAPITester:
         
         return success_latest and success_top
 
+    def test_large_list_retrieval(self) -> bool:
+        """Test retrieving a large number of posts from a Bluesky list (over 200 posts) to verify pagination."""
+        self.print_section("Large List Retrieval (200+ Posts)")
+        
+        # Use a list URL parameter if available, otherwise use a default test list
+        list_url = self.params.get("test_list_url", "https://bsky.app/profile/victoriano.bsky.social/lists/3ldzsanlyti27")
+        large_limit = 250  # Set a limit over 200 to ensure pagination is used
+        
+        # Extract handle and list ID from URL
+        try:
+            list_components = self.fetcher.parse_bluesky_list_url(list_url)
+            handle = list_components.get('handle')
+            list_id = list_components.get('list_id')
+            
+            if not handle or not list_id:
+                print(f"❌ Failed to parse list URL: {list_url}")
+                return False
+                
+            print(f"📝 Retrieving {large_limit} posts from list: {list_url}")
+            print(f"🔍 Using handle: {handle}, list_id: {list_id}")
+            
+            # This should trigger pagination since we're requesting over 200 posts
+            start_time = time.time()
+            posts = self.fetcher.get_posts_from_bluesky_list(handle, list_id, limit=large_limit)
+            end_time = time.time()
+            
+            success = len(posts) > 0
+            if success:
+                elapsed_time = end_time - start_time
+                post_count = len(posts)
+                print(f"✅ Successfully retrieved {post_count} posts from the list")
+                print(f"⏱️ Time taken: {elapsed_time:.2f} seconds")
+                print(f"📊 Retrieved {post_count / elapsed_time:.2f} posts per second on average")
+                
+                # Check if we got posts over the standard page size (100)
+                if post_count > 100:
+                    print(f"✅ Pagination is working! Retrieved {post_count} posts over multiple pages")
+                else:
+                    print(f"⚠️ Pagination could not be verified as only {post_count} posts were available")
+                
+                # Print some statistics about the results
+                if post_count > 0:
+                    dates = [post['created_at'] for post in posts if 'created_at' in post]
+                    if dates:
+                        earliest = min(dates)
+                        latest = max(dates)
+                        print(f"📅 Date range: {earliest} to {latest}")
+                
+                # Save all posts to a file for analysis
+                self._save_example("large_list_posts", posts, format='parquet')
+                print(f"📄 Saved all {post_count} posts to Parquet file")
+            else:
+                print(f"❌ Failed to find posts in list: {list_url}")
+                
+            return success
+        except Exception as e:
+            print(f"❌ Error during large list retrieval test: {str(e)}")
+            return False
+            
     def test_export_formats(self) -> bool:
         """Test exporting results in different formats."""
         self.print_section("Export Formats")
@@ -331,22 +390,43 @@ class BlueskyAPITester:
         print(f"📝 Exporting to JSON: {json_file}")
         json_result = self.fetcher.export_results(results, format='json', filename=json_file)
         
+        # Check if file exists at returned path or full output_dir path
+        json_saved_path = json_result if isinstance(json_result, str) else json_file
+        json_exists = os.path.exists(json_saved_path) or os.path.exists(json_file)
+        
         # Test CSV export
         csv_file = os.path.join(self.params["output_dir"], "test_export.csv")
         print(f"📝 Exporting to CSV: {csv_file}")
         csv_result = self.fetcher.export_results(results, format='csv', filename=csv_file)
+        
+        # Check if file exists at returned path or full output_dir path
+        csv_saved_path = csv_result if isinstance(csv_result, str) else csv_file
+        csv_exists = os.path.exists(csv_saved_path) or os.path.exists(csv_file)
         
         # Test Parquet export
         parquet_file = os.path.join(self.params["output_dir"], "test_export.parquet")
         print(f"📝 Exporting to Parquet: {parquet_file}")
         parquet_result = self.fetcher.export_results(results, format='parquet', filename=parquet_file)
         
-        # Check results
-        success = all([
-            json_result and os.path.exists(json_file),
-            csv_result and os.path.exists(csv_file),
-            parquet_result and os.path.exists(parquet_file)
-        ])
+        # Check if file exists at returned path or full output_dir path
+        parquet_saved_path = parquet_result if isinstance(parquet_result, str) else parquet_file
+        parquet_exists = os.path.exists(parquet_saved_path) or os.path.exists(parquet_file)
+        
+        # Debug information about results
+        json_status = json_result and json_exists
+        csv_status = csv_result and csv_exists
+        parquet_status = parquet_result and parquet_exists
+        
+        # Check results - individual checks
+        print(f"  - JSON export: {'✅' if json_result else '❌'} (Function return)")
+        print(f"  - JSON file exists: {'✅' if json_exists else '❌'}")
+        print(f"  - CSV export: {'✅' if csv_result else '❌'} (Function return)")
+        print(f"  - CSV file exists: {'✅' if csv_exists else '❌'}")
+        print(f"  - Parquet export: {'✅' if parquet_result else '❌'} (Function return)")
+        print(f"  - Parquet file exists: {'✅' if parquet_exists else '❌'}")
+        
+        # All formats must succeed
+        success = json_status and csv_status and parquet_status
         
         if success:
             print("✅ Successfully exported results in all formats")
@@ -355,9 +435,9 @@ class BlueskyAPITester:
             print(f"  - Parquet: {parquet_file}")
         else:
             print("⚠️ Some export formats failed:")
-            print(f"  - JSON: {'✅' if json_result else '❌'}")
-            print(f"  - CSV: {'✅' if csv_result else '❌'}")
-            print(f"  - Parquet: {'✅' if parquet_result else '❌'}")
+            print(f"  - JSON: {'✅' if json_status else '❌'} (Result={json_result}, File exists={json_exists})")
+            print(f"  - CSV: {'✅' if csv_status else '❌'} (Result={csv_result}, File exists={csv_exists})")
+            print(f"  - Parquet: {'✅' if parquet_status else '❌'} (Result={parquet_result}, File exists={parquet_exists})")
         
         return success
     
@@ -409,6 +489,7 @@ class BlueskyAPITester:
             "advanced_search": self.test_advanced_search(),
             "search_sort_options": self.test_search_sort_options(),
             "large_search": self.test_large_search(),
+            "large_list_retrieval": self.test_large_list_retrieval(),
             "export_formats": self.test_export_formats(),
             "get_posts_from_list": self.test_get_posts_from_list(),
         }
@@ -468,7 +549,7 @@ Examples:
     # Test selection arguments
     test_group = parser.add_argument_group("Test Selection")
     test_group.add_argument('--test', choices=[
-        'all', 'auth', 'user', 'users', 'list', 'search', 'advanced-search', 'search-sort', 'large-search', 'export'
+        'all', 'auth', 'user', 'users', 'list', 'search', 'advanced-search', 'search-sort', 'large-search', 'large-list', 'export'
     ], default='all', help="Run specific test(s)")
     
     args = parser.parse_args()
@@ -566,6 +647,8 @@ def main() -> None:
             results["search_sort_options"] = tester.test_search_sort_options()
         elif args.test == 'large-search':
             results["large_search"] = tester.test_large_search()
+        elif args.test == 'large-list':
+            results["large_list_retrieval"] = tester.test_large_list_retrieval()
         elif args.test == 'export':
             results["export_formats"] = tester.test_export_formats()
     
