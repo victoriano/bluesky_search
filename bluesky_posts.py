@@ -400,10 +400,14 @@ class BlueskyPostsFetcher:
                 
                 # Añadir imágenes si existen
                 if 'images' in post and post['images']:
-                    # Convertir el array a JSON string para mantener la estructura
-                    # pero hacerlo compatible con CSV
-                    import json
-                    flat_post['images'] = json.dumps(post['images'])
+                    # Si hay múltiples imágenes, separarlas con punto y coma
+                    # para que sean directamente clickeables en CSV sin formato JSON
+                    if len(post['images']) == 1:
+                        # Si solo hay una imagen, guardarla directamente sin array
+                        flat_post['images'] = post['images'][0]
+                    else:
+                        # Si hay múltiples imágenes, unirlas con punto y coma
+                        flat_post['images'] = ';'.join(post['images'])
                 else:
                     # Establecer como null cuando no hay imágenes
                     flat_post['images'] = None
@@ -667,14 +671,13 @@ class BlueskyPostsFetcher:
                         # Extraer URLs de las imágenes en lugar de textos alternativos
                         image_urls = []
                         for img in post.record.embed.images:
-                            if hasattr(img, 'image') and hasattr(img.image, 'ref'):
-                                # Acceder al enlace de la imagen en la propiedad ref
-                                ref_obj = img.image.ref
-                                if hasattr(ref_obj, 'link'):
-                                    # Construir URL completa de la imagen
-                                    cid = ref_obj.link.split('=')[-1] if '=' in ref_obj.link else ref_obj.link
-                                    image_url = f"https://cdn.bsky.app/img/feed/{cid}@jpeg"
-                                    image_urls.append(image_url)
+                            if hasattr(img, 'image') and hasattr(img.image, 'cid'):
+                                # Usar el formato de API pública de Bluesky que funciona en navegadores
+                                cid = img.image.cid
+                                author_did = post.author.did
+                                # Este formato funciona directamente en navegadores según confirma el usuario
+                                image_url = f"https://bsky.social/xrpc/com.atproto.sync.getBlob?did={author_did}&cid={cid}"
+                                image_urls.append(image_url)
                         
                         # Solo añadir el campo 'images' si hay URLs válidas
                         if image_urls:
