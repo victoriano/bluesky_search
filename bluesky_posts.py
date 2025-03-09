@@ -400,7 +400,10 @@ class BlueskyPostsFetcher:
                 
                 # Añadir imágenes si existen
                 if 'images' in post:
-                    flat_post['images'] = ', '.join(post['images'])
+                    # Convertir el array a JSON string para mantener la estructura
+                    # pero hacerlo compatible con CSV
+                    import json
+                    flat_post['images'] = json.dumps(post['images'])
                 
                 flattened_data.append(flat_post)
         
