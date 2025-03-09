@@ -37,3 +37,7 @@ credentials.txt
 
 # Keep the example credentials file
 !credentials_example.txt
+
+# macOS system files
+.DS_Store
+**/.DS_Store
