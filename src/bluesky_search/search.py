@@ -156,8 +156,36 @@ class BlueskySearch:
                         post_data['post_type'] = 'reply'
                         
                         # Initialize reply fields with default empty values
-                        post_data['replied_to_handle'] = ''
                         post_data['replied_to_id'] = ''
+                        
+                        # Check if reply information is directly available in the post object
+                        # This is the most reliable source when available
+                        if hasattr(post, 'reply'):
+                            # Extract reply information from the post's reply property
+                            # This is usually available in newer API responses
+                            if hasattr(post.reply, 'parent') and hasattr(post.reply.parent, 'author'):
+                                parent_author = post.reply.parent.author
+                                
+                                # We're no longer extracting the replied_to_handle field
+                                
+                                # Extract the parent author's DID
+                                if hasattr(parent_author, 'did'):
+                                    post_data['replied_to_id'] = parent_author.did
+                                elif isinstance(parent_author, dict) and 'did' in parent_author:
+                                    post_data['replied_to_id'] = parent_author['did']
+                        
+                        # If we couldn't get the reply information from the post object directly,
+                        # try getting it from the thread information if available
+                        if not post_data['replied_to_id'] and hasattr(post, 'thread'):
+                            if hasattr(post.thread, 'parent') and hasattr(post.thread.parent, 'author'):
+                                parent_author = post.thread.parent.author
+                                
+                                # We're no longer extracting the replied_to_handle field
+                                
+                                if not post_data['replied_to_id'] and hasattr(parent_author, 'did'):
+                                    post_data['replied_to_id'] = parent_author.did
+                                elif not post_data['replied_to_id'] and isinstance(parent_author, dict) and 'did' in parent_author:
+                                    post_data['replied_to_id'] = parent_author['did']
                         
                         # When a post is a reply, we need to fetch the parent post data to get replied-to info
                         if hasattr(post.record, 'reply'):
@@ -175,87 +203,17 @@ class BlueskySearch:
                                     parent_did = did_match.group(1)
                                     post_data['replied_to_id'] = parent_did
                                     
-                                    # Since we now have the DID, attempt to get the handle too
-                                    # First, try to get it from the original post's text
-                                    if post_data['text'] and post_data['text'].startswith('@'):
-                                        handle_match = re.match(r'^@([\w.-]+\.\w+(?:\.\w+)?)', post_data['text'])
-                                        if handle_match:
-                                            post_data['replied_to_handle'] = handle_match.group(1)
-                                    
-                                    # If we couldn't get it from the text, we need to make an API call
-                                    # This is a more expensive operation but ensures we get accurate data
-                                    if not post_data['replied_to_handle']:
-                                        try:
-                                            # Try different API methods to resolve the DID to a handle
-                                            try:
-                                                # Method 1: Direct getProfile call (may work with some client implementations)
-                                                profile = self.client.get_profile({'actor': parent_did})
-                                                if hasattr(profile, 'handle'):
-                                                    post_data['replied_to_handle'] = profile.handle
-                                                elif isinstance(profile, dict) and 'handle' in profile:
-                                                    post_data['replied_to_handle'] = profile['handle']
-                                            except Exception as e1:
-                                                # Method 2: Try the Bluesky XRPC API with explicit actor address
-                                                try:
-                                                    # This requires the client to support app.bsky.actor namespace
-                                                    # Different client implementations may have different APIs
-                                                    # First, try typical bsky.social clients
-                                                    if hasattr(self.client, 'app') and hasattr(self.client.app, 'bsky') and hasattr(self.client.app.bsky, 'actor'):
-                                                        profile_data = self.client.app.bsky.actor.getProfile({'actor': parent_did})
-                                                        if hasattr(profile_data, 'handle'):
-                                                            post_data['replied_to_handle'] = profile_data.handle
-                                                        elif isinstance(profile_data, dict) and 'handle' in profile_data:
-                                                            post_data['replied_to_handle'] = profile_data['handle']
-                                                except Exception as e2:
-                                                    # Final fallback - try to get the handle from the full parent post
-                                                    try:
-                                                        # Get the full URI of the parent post
-                                                        parent_uri = reply_info.parent.uri
-                                                        post_view = self.client.get_post_thread({'uri': parent_uri})
-                                                        if hasattr(post_view, 'thread') and hasattr(post_view.thread, 'post') and hasattr(post_view.thread.post, 'author'):
-                                                            post_data['replied_to_handle'] = post_view.thread.post.author.handle
-                                                    except Exception as e3:
-                                                        # If all methods fail, we'll resort to text-based extraction later
-                                                        pass
-                                        except Exception as e:
-                                            # If all API calls fail, fall back to other methods
-                                            # We'll continue with text-based extraction below
-                                            pass
+                                    # We don't need to extract any handle information anymore
                         
-                        # Fallback method: Extract from mentions in text
-                        if (not post_data['replied_to_handle'] or not post_data['replied_to_id']) and post_data['text']:
-                            raw_mentions = post_data.get('mentions', [])
-                            
-                            # Method 1: Check text using regex (common in replies) if it starts with @username
-                            if post_data['text'].startswith('@') and not post_data['replied_to_handle']:
-                                import re
-                                patterns = [
-                                    r'^@([\w.-]+\.\w+\.\w+)',  # user.domain.tld
-                                    r'^@([\w.-]+\.\w+)',       # user.domain
-                                ]
-                                
-                                for pattern in patterns:
-                                    match = re.match(pattern, post_data['text'])
-                                    if match:
-                                        post_data['replied_to_handle'] = match.group(1)
-                                        break
-                            
-                            # Method 2: Use mentions array data if available
-                            if not post_data['replied_to_handle'] and raw_mentions:
-                                if isinstance(raw_mentions, list) and len(raw_mentions) > 0:
-                                    # First mention in a reply is usually who was replied to
-                                    first_mention = raw_mentions[0]
-                                    if isinstance(first_mention, str):
-                                        post_data['replied_to_handle'] = first_mention.replace('@', '')
-                                    elif isinstance(first_mention, dict):
-                                        if 'handle' in first_mention:
-                                            post_data['replied_to_handle'] = first_mention['handle']
-                                        if 'did' in first_mention and not post_data['replied_to_id']:
-                                            post_data['replied_to_id'] = first_mention['did']
+                        # Check mentions only for DID information
+                        raw_mentions = post_data.get('mentions', [])
+                        if raw_mentions and isinstance(raw_mentions, list) and len(raw_mentions) > 0:
+                            # First mention in a reply might contain useful information
+                            first_mention = raw_mentions[0]
+                            if isinstance(first_mention, dict) and 'did' in first_mention and not post_data['replied_to_id']:
+                                post_data['replied_to_id'] = first_mention['did']
                         
-                        # Ensure no @ symbol in the handle
-                        if post_data['replied_to_handle'] and post_data['replied_to_handle'].startswith('@'):
-                            post_data['replied_to_handle'] = post_data['replied_to_handle'][1:]
+                        # No longer needed since we removed replied_to_handle
                     else:
                         # For non-reply posts, check if they're reposts
                         
@@ -346,6 +304,9 @@ class BlueskySearch:
                 time.sleep(0.5)  # Half-second pause between calls
             
             print(f"✅ Found a total of {len(posts)} posts matching the search")
+            
+            # We're no longer resolving replied_to_handle fields
+            
             return posts
             
         except Exception as e:
