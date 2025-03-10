@@ -163,6 +163,156 @@ class BlueskyList:
             print(f"❌ Error getting list: {str(e)}")
             return {}
     
+    def get_list_feed(self, handle: str, list_id: str, limit: int = 100) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Get posts directly from a Bluesky list feed/timeline using the app.bsky.feed.get_timeline endpoint.
+        
+        Args:
+            handle: Handle of the list owner
+            list_id: ID of the list
+            limit: Maximum number of posts to retrieve
+            
+        Returns:
+            Dict: Dictionary with usernames as keys and lists of posts as values
+        """
+        try:
+            # Get the list DID
+            if handle.startswith('did:'):
+                profile_did = handle
+            else:
+                profile = self.client.get_profile(actor=handle)
+                profile_did = profile.did
+            
+            # Sanitize components
+            list_id = sanitize_uri_component(list_id)
+            profile_did = sanitize_uri_component(profile_did)
+            
+            # Build the list URI in the correct format for the AT Protocol API
+            list_uri = f"at://{profile_did}/app.bsky.graph.list/{list_id}"
+            
+            print(f"📊 Getting feed for list: {list_uri}")
+            
+            # DIRECT APPROACH: Use the feed.getTimeline with the list parameter
+            try:
+                # Set up parameters for pagination
+                params = {
+                    "algorithm": "reverse-chronological",  # Standard feed algorithm
+                    "limit": min(100, limit)            # API limit is 100 per request
+                }
+                
+                # Add list parameter which is the correct way to filter by list
+                params["list"] = list_uri
+                
+                print(f"🔍 Using direct list timeline API endpoint...")
+                
+                all_posts = []
+                cursor = None
+                
+                # Fetch posts with pagination
+                while len(all_posts) < limit:
+                    if cursor:
+                        params["cursor"] = cursor
+                    
+                    # Call the timeline API with the list filter
+                    try:
+                        timeline_response = self.client.app.bsky.feed.get_timeline(params)
+                        feed_items = getattr(timeline_response, 'feed', [])
+                        
+                        if not feed_items:
+                            print(f"No more posts found in list")
+                            break
+                            
+                        # Extract posts from feed
+                        for item in feed_items:
+                            if hasattr(item, 'post') and hasattr(item.post, 'author'):
+                                # Extract relevant data for each post
+                                author_handle = item.post.author.handle
+                                author_display_name = getattr(item.post.author, 'display_name', author_handle)
+                                
+                                # Create standardized post object
+                                post_data = {
+                                    'uri': item.post.uri,
+                                    'cid': item.post.cid,
+                                    'author': {
+                                        'did': item.post.author.did,
+                                        'handle': author_handle,
+                                        'display_name': author_display_name
+                                    },
+                                    'record': item.post.record,
+                                    'indexed_at': item.post.indexed_at
+                                }
+                                all_posts.append(post_data)
+                                
+                        # Check if we reached the desired limit
+                        if len(all_posts) >= limit:
+                            break
+                            
+                        # Get cursor for next page if available
+                        cursor = getattr(timeline_response, 'cursor', None)
+                        if not cursor:
+                            break
+                            
+                        # Small delay between requests
+                        time.sleep(0.3)
+                        
+                    except Exception as e:
+                        print(f"Error fetching timeline: {str(e)}")
+                        break
+                
+                # Organize posts by author
+                results = {}
+                for post in all_posts:
+                    author_handle = post['author']['handle']
+                    if author_handle not in results:
+                        results[author_handle] = []
+                    results[author_handle].append(post)
+                    
+                if results:
+                    print(f"✅ Successfully retrieved {len(all_posts)} posts directly from list timeline")
+                    # Print each author and number of posts
+                    for author, posts in results.items():
+                        print(f"✅ Retrieved {len(posts)} posts from @{author}")
+                    return results
+                        
+            except Exception as e:
+                print(f"❌ Error with direct list timeline: {str(e)}")
+                
+            # If we get here, direct approach failed - try with list members
+            print(f"⚠️ Direct list timeline fetch failed, getting list members...")
+            
+            # Get the list members
+            list_response = self.client.app.bsky.graph.get_list({"list": list_uri})
+            
+            if not hasattr(list_response, 'items') or not list_response.items:
+                print(f"❌ No members found in list")
+                return {}
+                
+            # Extract member handles
+            handles = []
+            for item in list_response.items:
+                if hasattr(item, 'subject') and hasattr(item.subject, 'handle'):
+                    handles.append(item.subject.handle)
+            
+            print(f"✅ Found {len(handles)} users in list {list_id}")
+            print(f"⚠️ Falling back to member-by-member approach")
+            
+            if handles:
+                # Calculate posts per user to respect the total limit
+                posts_per_user = max(1, limit // len(handles))
+                
+                # Get posts for each user in the list
+                from .fetcher import BlueskyPostsFetcher
+                fetcher = BlueskyPostsFetcher()
+                fetcher.client = self.client  # Share the authenticated client
+                
+                return fetcher.get_posts_from_users(handles, posts_per_user)
+            else:
+                print("❌ Could not extract any user handles from the list")
+                return {}
+        except Exception as e:
+            print(f"❌ Error with list feed: {str(e)}")
+            return {}
+    
     def get_posts_from_bluesky_list_url(self, list_url: str, limit: int = 100) -> Dict[str, List[Dict[str, Any]]]:
         """
         Get posts from a Bluesky list URL.
@@ -180,5 +330,12 @@ class BlueskyList:
         if not list_info:
             return {}
         
-        # Get posts from the list
-        return self.get_posts_from_bluesky_list(list_info['handle'], list_info['list_id'], limit)
+        # Try to get the feed directly first
+        result = self.get_list_feed(list_info['handle'], list_info['list_id'], limit)
+        
+        # If direct feed fetch fails, fall back to the member-by-member approach
+        if not result:
+            print("⚠️ Direct list feed fetch failed, falling back to member-by-member approach")
+            return self.get_posts_from_bluesky_list(list_info['handle'], list_info['list_id'], limit)
+            
+        return result
