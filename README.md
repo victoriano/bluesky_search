@@ -60,6 +60,41 @@ uv pip install bluesky-search
 pip install bluesky-search
 ```
 
+## Development
+
+### Building and Publishing
+
+To build and publish this package to PyPI using uv:
+
+```bash
+# Build the package - creates distributions in the dist/ directory
+uv build
+
+# Publish to PyPI using a token (recommended)
+uv publish --token "your-token-here"
+
+# Alternatively, publish with username/password
+uv publish --username your-username --password your-password
+
+# For testing, you can publish to TestPyPI first
+uv publish --publish-url https://test.pypi.org/legacy/ --token "your-test-token-here"
+```
+
+For security, you can avoid putting tokens in your command history by:
+
+1. Using environment variables:
+   ```bash
+   export UV_PUBLISH_TOKEN=your-token-here
+   uv publish
+   ```
+
+2. Creating a `.pypirc` file in your home directory:
+   ```
+   [pypi]
+   username = __token__
+   password = your-token-here
+   ```
+
 ## Usage
 
 ### As a Command Line Tool
