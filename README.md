@@ -132,8 +132,11 @@ fetcher.export_to_parquet(posts, "output.parquet")
 - `-l`, `--list`: Space-separated list of users
 - `-b`, `--bsky-list`: Bluesky list URL
 - `-n`, `--limit`: Max posts per user/search (default: 20, no upper limit for searches)
-- `-o`, `--output`: Output filename
-- `-x`, `--format`: Export format (`json`, `csv`, or `parquet`, default: `csv`)
+- `-o`, `--output`: Output filename or path
+- `--output-dir`: Specific directory to save output files (highest priority)
+- `-d`, `--data-dir`: Save output to the project's data directory
+- `-e`, `--export`: Export format (`json`, `csv`, or `parquet`, default: `csv`)
+- `-x`, `--format`: Legacy alias for `-e`
 
 #### Search Parameters
 
@@ -162,6 +165,15 @@ bluesky-search -a user.bsky.social -e csv -o user_posts.csv
 
 # Export to Parquet format
 bluesky-search -a user.bsky.social -e parquet -o my_posts.parquet
+
+# Save output to a specific directory
+bluesky-search -a user.bsky.social --output-dir /path/to/custom/directory
+
+# Save output to the project's data directory
+bluesky-search -a user.bsky.social -d
+
+# Run directly with uv during development
+uv run -m src.bluesky_search.cli -s "keyword" -d
 ```
 
 ## Complete Search Guide

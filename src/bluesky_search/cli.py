@@ -24,10 +24,12 @@ def generate_output_filename(base_name: str, export_format: str) -> str:
         export_format: Export format extension
         
     Returns:
-        str: Timestamped filename
+        str: Timestamped filename with path relative to current working directory
     """
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{base_name}_{timestamp}.{export_format}"
+    # Ensure no directory information is included in the base_name
+    clean_base_name = os.path.basename(base_name)
+    return f"{clean_base_name}_{timestamp}.{export_format}"
 
 def main():
     """Main function to run the CLI."""
@@ -46,9 +48,11 @@ def main():
     
     # Options
     parser.add_argument("-n", "--limit", type=int, default=20, help="Maximum number of posts to retrieve per user")
-    parser.add_argument("-o", "--output", help="Output file path (default: auto-generated)")
+    parser.add_argument("-o", "--output", help="Output file name or path (default: auto-generated)")
+    parser.add_argument("--output-dir", help="Specific directory to save output files (highest priority)")
     parser.add_argument("-e", "--export", choices=["json", "csv", "parquet"], default="csv", help="Export format")
     parser.add_argument("-x", "--format", dest="export", choices=["json", "csv", "parquet"], help="Export format (legacy option, use -e instead)")
+    parser.add_argument("-d", "--data-dir", action="store_true", help="Save output to the data directory when running with uv run -m (overridden by --output-dir)")
     
     # Additional search filters
     search_group = parser.add_argument_group("search filters", "Additional filters for search queries")
@@ -149,11 +153,64 @@ def main():
         
         print(f"✅ Retrieved {len(posts)} posts in total")
         
+        # Determine the target directory to save files
+        target_dir = None
+        
+        # Priority 1: Explicit output directory specified by --output-dir
+        if args.output_dir:
+            if os.path.exists(args.output_dir):
+                target_dir = args.output_dir
+                print(f"📁 Using specified output directory: {target_dir}")
+            else:
+                try:
+                    os.makedirs(args.output_dir)
+                    target_dir = args.output_dir
+                    print(f"✅ Created output directory: {target_dir}")
+                except Exception as e:
+                    print(f"⚠️ Could not create output directory: {str(e)}")
+                    # Fall back to next priority
+                    args.output_dir = None
+        
+        # Priority 2: Data directory flag
+        if target_dir is None and args.data_dir:
+            # Try to find the data directory
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            data_dir = os.path.join(project_root, 'data')
+            
+            # Check if data directory exists, create it if not
+            if not os.path.exists(data_dir):
+                try:
+                    os.makedirs(data_dir)
+                    print(f"✅ Created data directory: {data_dir}")
+                except Exception as e:
+                    print(f"⚠️ Could not create data directory: {str(e)}")
+                    # Fall back to next priority
+                    args.data_dir = False
+            
+            if args.data_dir:  # Only set if we didn't encounter errors
+                target_dir = data_dir
+                print(f"📁 Using data directory: {target_dir}")
+        
+        # Priority 3: Current working directory (default)
+        if target_dir is None:
+            target_dir = os.getcwd()
+            print(f"📁 Using current directory: {target_dir}")
+        
         # Determine the output file path
         if args.output:
-            output_path = args.output
+            # If user specified a full path with directories, use it as is
+            if os.path.dirname(args.output):
+                output_path = args.output
+                print(f"📄 Using full output path: {output_path}")
+            else:
+                # Just a filename, use with the target directory
+                output_path = os.path.join(target_dir, args.output)
+                print(f"📄 Using filename in target directory: {output_path}")
         else:
-            output_path = generate_output_filename(output_base, args.export)
+            # Generate filename and use with target directory
+            filename = generate_output_filename(output_base, args.export)
+            output_path = os.path.join(target_dir, filename)
+            print(f"📄 Generated filename in target directory: {output_path}")
         
         # Export the results
         print(f"💾 Exporting results to {output_path}")
