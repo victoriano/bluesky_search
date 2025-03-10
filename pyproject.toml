@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bluesky-search"
-version = "0.1.0"
+version = "0.1.2"
 description = "A package to search, fetch, and export posts from Bluesky social network"
 readme = "README.md"
 authors = [
@@ -23,10 +23,11 @@ classifiers = [
 ]
 dependencies = [
     "atproto>=0.0.26",
+    "polars>=0.19.2",
 ]
 
 [project.optional-dependencies]
-export = ["polars>=0.19.2"]
+export = []
 dev = [
     "pytest>=6.0",
     "black>=22.1.0",
