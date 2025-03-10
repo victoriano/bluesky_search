@@ -73,11 +73,6 @@ uv build
 # Publish to PyPI using a token (recommended)
 uv publish --token "your-token-here"
 
-# Alternatively, publish with username/password
-uv publish --username your-username --password your-password
-
-# For testing, you can publish to TestPyPI first
-uv publish --publish-url https://test.pypi.org/legacy/ --token "your-test-token-here"
 ```
 
 For security, you can avoid putting tokens in your command history by:
@@ -138,7 +133,7 @@ fetcher.export_to_parquet(posts, "output.parquet")
 - `-b`, `--bsky-list`: Bluesky list URL
 - `-n`, `--limit`: Max posts per user/search (default: 20, no upper limit for searches)
 - `-o`, `--output`: Output filename
-- `-x`, `--format`: Export format (`json`, `csv`, or `parquet`, default: `json`)
+- `-x`, `--format`: Export format (`json`, `csv`, or `parquet`, default: `csv`)
 
 #### Search Parameters
 

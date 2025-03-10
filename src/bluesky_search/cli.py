@@ -47,7 +47,7 @@ def main():
     # Options
     parser.add_argument("-n", "--limit", type=int, default=20, help="Maximum number of posts to retrieve per user")
     parser.add_argument("-o", "--output", help="Output file path (default: auto-generated)")
-    parser.add_argument("-e", "--export", choices=["json", "csv", "parquet"], default="json", help="Export format")
+    parser.add_argument("-e", "--export", choices=["json", "csv", "parquet"], default="csv", help="Export format")
     parser.add_argument("-x", "--format", dest="export", choices=["json", "csv", "parquet"], help="Export format (legacy option, use -e instead)")
     
     # Additional search filters
