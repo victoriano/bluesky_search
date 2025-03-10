@@ -158,10 +158,12 @@ wheels = [
 
 [[package]]
 name = "bluesky-search"
-version = "0.1.0"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "atproto" },
+    { name = "polars", version = "1.8.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "polars", version = "1.24.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
 ]
 
 [package.optional-dependencies]
@@ -172,17 +174,13 @@ dev = [
     { name = "isort", version = "6.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "pytest" },
 ]
-export = [
-    { name = "polars", version = "1.8.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "polars", version = "1.24.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "atproto", specifier = ">=0.0.26" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=22.1.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.9.0" },
-    { name = "polars", marker = "extra == 'export'", specifier = ">=0.19.2" },
+    { name = "polars", specifier = ">=0.19.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=6.0" },
 ]
 provides-extras = ["export", "dev"]

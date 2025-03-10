@@ -288,6 +288,63 @@ class BlueskyPostsFetcher(BlueskyClient):
         
         # Delegate to the list component
         return self._list.get_posts_from_bluesky_list_url(list_url, limit)
+        
+    def get_list_posts(self, list_url: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get posts from a Bluesky list URL and return them as a flat list.
+        This is used by the CLI.
+        
+        Args:
+            list_url: URL of the Bluesky list
+            limit: Maximum number of posts to retrieve
+            
+        Returns:
+            List[Dict]: Flat list of posts from the list
+        """
+        # Get posts organized by author
+        results_by_author = self.get_posts_from_bluesky_list_url(list_url, limit)
+        
+        # Flatten the dictionary into a list
+        all_posts = []
+        for user_posts in results_by_author.values():
+            all_posts.extend(user_posts)
+            
+        return all_posts
+        
+    def get_list_info(self, list_url: str) -> Dict[str, Any]:
+        """
+        Get information about a Bluesky list.
+        
+        Args:
+            list_url: URL of the Bluesky list
+            
+        Returns:
+            Dict: Information about the list
+        """
+        # Initialize the list component if needed
+        if self._list is None:
+            self._list = BlueskyList(self.client)
+            
+        # Parse the list URL to extract handle and list_id
+        from .utils import parse_bluesky_list_url
+        list_info = parse_bluesky_list_url(list_url)
+        
+        if not list_info:
+            return {'name': 'unknown_list'}
+            
+        try:
+            # Get the list details
+            handle = list_info['handle']
+            list_id = list_info['list_id']
+            
+            # Fetch list data from the API
+            list_data = self._list.get_list_details(handle, list_id)
+            
+            # Return list details with a default name if not found
+            return {'name': list_data.get('name', list_id), 'id': list_id, 'handle': handle}
+        except Exception as e:
+            print(f"⚠️ Error getting list info: {str(e)}")
+            return {'name': list_id if 'list_id' in list_info else 'unknown_list'}
     
     def get_posts_from_bluesky_list(self, handle: str, list_id: str, limit: int = 100) -> Dict[str, List[Dict[str, Any]]]:
         """
