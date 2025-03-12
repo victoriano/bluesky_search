@@ -309,6 +309,16 @@ class BlueskyList:
                         if mentions:
                             post_data['mentions'] = mentions
                         
+                        # Add language information if available
+                        if hasattr(post.record, 'langs') and post.record.langs:
+                            # Use the first language in the list if it's a list
+                            if isinstance(post.record.langs, list) and len(post.record.langs) > 0:
+                                post_data['lang'] = post.record.langs[0]
+                            else:
+                                post_data['lang'] = str(post.record.langs)
+                        else:
+                            post_data['lang'] = getattr(post.record, 'lang', '')
+                        
                         page_posts.append(post_data)
                 
                 # Add the posts from this page to the complete list
@@ -511,8 +521,15 @@ class BlueskyList:
                                     
                                 post_data['post_type'] = post_type
                                 
-                                # Get language if available
-                                post_data['lang'] = getattr(record, 'lang', '')
+                                # Add language information if available
+                                if hasattr(record, 'langs') and record.langs:
+                                    # Use the first language in the list if it's a list
+                                    if isinstance(record.langs, list) and len(record.langs) > 0:
+                                        post_data['lang'] = record.langs[0]
+                                    else:
+                                        post_data['lang'] = str(record.langs)
+                                else:
+                                    post_data['lang'] = getattr(record, 'lang', '')
                                 
                                 # Generate web URL for convenient access
                                 post_data['web_url'] = f"https://bsky.app/profile/{author_handle}/post/{item.post.uri.split('/')[-1]}"
